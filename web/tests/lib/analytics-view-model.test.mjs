@@ -9,6 +9,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { progressModel, statsModel, rateOrNull, isUnlabelled } from "../../src/lib/analytics/view-model.mjs";
+import { scoreThresholdFrom } from "../../../analyze-patterns.mjs";
 
 test("a rate over nothing is absent, not zero", () => {
   // The failure this prevents: a user who has not applied yet being shown
@@ -106,6 +107,34 @@ test("an unsupported threshold keeps its reasoning but loses its number", () => 
   assert.equal(t2.value, null);
   assert.equal(t2.provisional, true);
   assert.equal(t2.note, "because", "the reasoning is still worth showing");
+});
+
+test("the threshold panel shows the core's reasoning when it recommends nothing", () => {
+  // Real core output, not a hand-built shape: scoreThresholdFrom() sets
+  // `recommended` only for a sufficient sample with a rejection below the
+  // cutoff, so a panel gated on a finite `recommended` never appeared for a
+  // thin sample, and never as provisional.
+  const thin = statsModel({ scoreThreshold: scoreThresholdFrom([4.2, 3.9], [3.1]) });
+  const t1 = thin.sections.find((s) => s.key === "threshold");
+  assert.ok(t1, "two positive scored outcomes: the panel must still explain itself");
+  assert.equal(t1.value, null);
+  assert.equal(t1.provisional, true);
+  assert.match(t1.note, /only 2 positive outcome\(s\) carry a score/);
+
+  // Enough positives, but no rejection below the lowest: no cutoff to
+  // recommend, and not for want of a sample.
+  const noContrast = statsModel({ scoreThreshold: scoreThresholdFrom([4.2, 3.9, 4.0], [4.5]) });
+  const t2 = noContrast.sections.find((s) => s.key === "threshold");
+  assert.ok(t2);
+  assert.equal(t2.value, null);
+  assert.equal(t2.provisional, false);
+  assert.match(t2.note, /nothing shows that lower scores fail/);
+
+  // And the recommendation itself still comes through.
+  const solid = statsModel({ scoreThreshold: scoreThresholdFrom([4.2, 3.9, 4.0], [3.1]) });
+  const t3 = solid.sections.find((s) => s.key === "threshold");
+  assert.equal(t3.value, 3.9);
+  assert.equal(t3.provisional, false);
 });
 
 test("an Unknown-only breakdown is not rendered as an insight", () => {
