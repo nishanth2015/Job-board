@@ -33,6 +33,38 @@ try {
     });
   }
 
+  const latexSource = join(directory, 'cv.tex');
+  const latexOptions = { ...options, sourcePaths: [latexSource], requiredSourcePaths: [latexSource] };
+  for (const [label, body] of [
+    ['empty', ''],
+    ['whitespace-only', '\n \t\r\n'],
+    ['comment-only', '\n% Managed 20 people.\n  % Maintained alert rules.\n'],
+  ]) {
+    check(`${label} extracted LaTeX bodies reject a claim-free target when required`, () => {
+      fs.writeFileSync(latexSource, `\\documentclass{article}\n\\begin{document}${body}\\end{document}\n`);
+      assert.throws(() => verifyFacts('Maintained alert rules.', latexOptions), /Required fact source is empty:/);
+    });
+  }
+
+  check('a nonempty required LaTeX body still supports its actual metric', () => {
+    fs.writeFileSync(latexSource, String.raw`\documentclass{article}
+\newcommand{\oldTeam}{Managed 999 people.}
+\begin{document}
+% Managed 777 people.
+Managed 20 people.
+\end{document}
+`);
+    const result = verifyFacts('Managed 20 people.', latexOptions);
+    assert.equal(result.verdict, 'pass');
+    assert.deepEqual(result.invented, []);
+  });
+
+  check('required LaTeX sources still exclude preamble and comment metrics from evidence', () => {
+    const result = verifyFacts('Managed 999 people. Managed 777 people.', latexOptions);
+    assert.equal(result.verdict, 'block');
+    assert.deepEqual(result.invented.sort(), ['777 people', '999 people']);
+  });
+
   check('requiring a source does not silently add it to the evidence list', () => {
     fs.writeFileSync(source, '- Managed 20 people.\n');
     assert.throws(() => verifyFacts('Managed 20 people.', { ...options, sourcePaths: [] }), /Required fact source not included:/);

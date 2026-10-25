@@ -2110,7 +2110,8 @@ function sourceContainsFact(sourceText, value) {
 /**
  * @param {string} targetText generated candidate-facing HTML/Markdown/text
  * @param {{ sourcePaths?: string[], requiredSourcePaths?: string[], planTexts?: string[], configPath?: string, cwd?: string }} options
- *   requiredSourcePaths: sources that must be included, readable and non-empty.
+ *   requiredSourcePaths: sources that must be included, readable and non-empty
+ *   after extracting the LaTeX body (other source formats are unchanged).
  *   Their required check and claim extraction use the same single file read.
  *   planTexts: what the candidate wrote for one document, such as the answers
  *   for a cover letter. They support only a number the document states as a
@@ -2137,9 +2138,10 @@ export function verifyFacts(targetText, {
     if (required.has(path)) {
       try { text = readFileSync(path, 'utf-8'); }
       catch (error) { throw new Error(`Required fact source is not readable: ${path}`, { cause: error }); }
-      if (!text.trim()) throw new Error(`Required fact source is empty: ${path}`);
     } else text = readIfExists(path);
-    return latexBody(text);
+    const body = latexBody(text);
+    if (required.has(path) && !body.trim()) throw new Error(`Required fact source is empty: ${path}`);
+    return body;
   }).join('\n');
   const { missing: configMissing, config } = loadFactConfig(resolveInputPath(configPath, cwd));
   const allowed = allowedMetricSet(sourceText, config.allow_metrics);
