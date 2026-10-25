@@ -2109,7 +2109,10 @@ function sourceContainsFact(sourceText, value) {
 
 /**
  * @param {string} targetText generated candidate-facing HTML/Markdown/text
- * @param {{ sourcePaths?: string[], planTexts?: string[], configPath?: string, cwd?: string }} options
+ * @param {{ sourcePaths?: string[], requiredSourcePaths?: string[], planTexts?: string[], configPath?: string, cwd?: string }} options
+ *   requiredSourcePaths: sources that must be included, readable and non-empty
+ *   after extracting the LaTeX body (other source formats are unchanged).
+ *   Their required check and claim extraction use the same single file read.
  *   planTexts: what the candidate wrote for one document, such as the answers
  *   for a cover letter. They support only a number the document states as a
  *   plan, never an employer, title, tool, or past experience. The rendered
@@ -2119,6 +2122,7 @@ function sourceContainsFact(sourceText, value) {
  */
 export function verifyFacts(targetText, {
   sourcePaths = DEFAULT_SOURCES,
+  requiredSourcePaths = [],
   planTexts = [],
   configPath = DEFAULT_CONFIG,
   cwd = process.cwd(),
@@ -2126,7 +2130,19 @@ export function verifyFacts(targetText, {
   // Per file, before the join: stripMarkup keeps only the body of a LaTeX
   // document, and run on the joined text it would discard every source read
   // ahead of a .tex one as if it were that document's preamble.
-  const sourceText = sourcePaths.map(path => latexBody(readIfExists(resolveInputPath(path, cwd)))).join('\n');
+  const paths = sourcePaths.map(path => resolveInputPath(path, cwd));
+  const required = new Set(requiredSourcePaths.map(path => resolveInputPath(path, cwd)));
+  for (const path of required) if (!paths.includes(path)) throw new Error(`Required fact source not included: ${path}`);
+  const sourceText = paths.map(path => {
+    let text;
+    if (required.has(path)) {
+      try { text = readFileSync(path, 'utf-8'); }
+      catch (error) { throw new Error(`Required fact source is not readable: ${path}`, { cause: error }); }
+    } else text = readIfExists(path);
+    const body = latexBody(text);
+    if (required.has(path) && !body.trim()) throw new Error(`Required fact source is empty: ${path}`);
+    return body;
+  }).join('\n');
   const { missing: configMissing, config } = loadFactConfig(resolveInputPath(configPath, cwd));
   const allowed = allowedMetricSet(sourceText, config.allow_metrics);
   const targetClaims = metricClaims(targetText);
