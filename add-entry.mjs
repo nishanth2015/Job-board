@@ -38,12 +38,13 @@
  * files so tests never touch a real user CV.
  */
 
-import { readFileSync, existsSync } from 'fs';
-import { join, dirname } from 'path';
+import { readFileSync, existsSync, realpathSync } from 'fs';
+import { join, dirname, basename } from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { getCareerOpsRoot } from './path-resolver.mjs';
 import { normalizeTextKey } from './tracker-parse.mjs';
-import { replaceUserFile } from './tracker-utils.mjs';
+import { replaceUserFile, userFileWriteTarget } from './tracker-utils.mjs';
+import { acquireDirLock, releaseOrWarn } from './lib/dir-lock.mjs';
 import { validateFlags } from './lib/cli-flags.mjs';
 import { isMainModule } from './lib/is-main-module.mjs';
 
@@ -242,37 +243,59 @@ async function main() {
     process.exit(1);
   }
 
-  const cvText = existsSync(CV_FILE) ? readFileSync(CV_FILE, 'utf-8') : null;
-  const articleText = existsSync(ARTICLE_DIGEST_FILE) ? readFileSync(ARTICLE_DIGEST_FILE, 'utf-8') : null;
-
-  let out;
+  const locks = [];
   try {
-    out = applyAdd(payload, { cvText, articleText });
-  } catch (e) {
-    console.error(`add-entry: ${e.message}`);
-    process.exit(1);
-  }
-
-  if (!dryRun) {
-    // Track what actually landed so a failure on the second write reports which
-    // file was already mutated (the two writes aren't transactional).
-    const written = [];
-    try {
-      if (payload.cv && out.result.cv?.status === 'added') {
-        replaceUserFile(CV_FILE, out.cv);
-        written.push('cv.md');
-      }
-      if (payload.articleDigest && (out.result.articleDigest?.status === 'added' || out.result.articleDigest?.status === 'created')) {
-        replaceUserFile(ARTICLE_DIGEST_FILE, out.articleDigest);
-        written.push('article-digest.md');
-      }
-    } catch (e) {
-      console.error(`add-entry: write failed after writing [${written.join(', ') || 'nothing'}]: ${e.message}`);
-      process.exit(1);
+    // Lock the actual files before reading: an atomic rename alone still loses
+    // another process's confirmed addition. Sort and dedupe to avoid deadlocks.
+    const targets = dryRun ? [] : [
+      ...(payload?.cv ? [CV_FILE] : []),
+      ...(payload?.articleDigest ? [ARTICLE_DIGEST_FILE] : []),
+    ].map(file => {
+      const target = userFileWriteTarget(file);
+      return join(realpathSync(dirname(target)), basename(target));
+    });
+    for (const target of [...new Set(targets)].sort()) {
+      locks.push(await acquireDirLock(`${target}.add-entry.lock`, {
+        timeoutMs: 60_000, retryMs: 50, staleMs: 600_000,
+        owner: { tool: 'add-entry' },
+      }));
     }
-  }
+    const cvText = existsSync(CV_FILE) ? readFileSync(CV_FILE, 'utf-8') : null;
+    const articleText = existsSync(ARTICLE_DIGEST_FILE) ? readFileSync(ARTICLE_DIGEST_FILE, 'utf-8') : null;
 
-  console.log(JSON.stringify({ dryRun, ...out.result }, null, 2));
+    let out;
+    try {
+      out = applyAdd(payload, { cvText, articleText });
+    } catch (e) {
+      console.error(`add-entry: ${e.message}`);
+      process.exitCode = 1;
+      return;
+    }
+
+    if (!dryRun) {
+      // Track what actually landed so a failure on the second write reports which
+      // file was already mutated (the two writes aren't transactional).
+      const written = [];
+      try {
+        if (payload.cv && out.result.cv?.status === 'added') {
+          replaceUserFile(CV_FILE, out.cv);
+          written.push('cv.md');
+        }
+        if (payload.articleDigest && (out.result.articleDigest?.status === 'added' || out.result.articleDigest?.status === 'created')) {
+          replaceUserFile(ARTICLE_DIGEST_FILE, out.articleDigest);
+          written.push('article-digest.md');
+        }
+      } catch (e) {
+        console.error(`add-entry: write failed after writing [${written.join(', ') || 'nothing'}]: ${e.message}`);
+        process.exitCode = 1;
+        return;
+      }
+    }
+
+    console.log(JSON.stringify({ dryRun, ...out.result }, null, 2));
+  } finally {
+    for (const lock of locks.reverse()) releaseOrWarn(lock);
+  }
 }
 
 // Only run main() when invoked directly, not when imported by tests.
