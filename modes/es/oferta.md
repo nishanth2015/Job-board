@@ -434,7 +434,23 @@ Guardar la evaluación completa en `reports/{###}-{company-slug}-{YYYY-MM-DD}.md
 (el texto completo de la oferta, pegado tal cual — ver el requisito más abajo)
 ```
 
-**Archivo de la JD (obligatorio, #2789):** todo report DEBE llevar una sección `## Job Description (archived verbatim)` con el texto completo de la oferta pegado tal cual, nunca resumido ni parafraseado. El encabezado se queda en inglés: `check-jd-archive.mjs` lo busca por su nombre. Un `**URL:**` no es un archivo: deja de funcionar cuando la oferta se cierra, y entonces ya no hay forma de recuperar los requisitos originales. La primera línea de la sección es la fecha de publicación tal como se ve en la fuente (`Posted: {fecha o texto relativo}`, o `Posted: not visible in source`), nunca la fecha del archivo del report. Si la JD es muy larga o no se puede citar entera, capturarla con `archive-posting.mjs <url> --company={company-slug} --report={num}` y poner en la sección **exactamente** `See jds/{filename} for the full archive (archive-posting.mjs --report={num}).`, sin más texto. Nunca una paráfrasis en su lugar; la regla completa está en `modes/oferta.md` (**JD archival**).
+**Archivo de la JD (obligatorio, #2789):** todo report DEBE llevar una sección `## Job Description (archived verbatim)` con el texto completo de la oferta pegado tal cual, nunca resumido ni parafraseado. El encabezado se queda en inglés: `check-jd-archive.mjs` lo busca por su nombre. Un `**URL:**` no es un archivo: deja de funcionar cuando la oferta se cierra, y entonces ya no hay forma de recuperar los requisitos originales. La primera línea de la sección es la fecha de publicación tal como se ve en la fuente (`Posted: {fecha o texto relativo}`, o `Posted: not visible in source`), nunca la fecha del archivo del report. Si la JD es muy larga o no se puede citar entera, capturarla con `archive-posting.mjs` (comando de abajo) y poner en la sección **exactamente** `See jds/{filename} for the full archive (archive-posting.mjs --report={num}).`, sin más texto. Nunca una paráfrasis en su lugar; la regla completa está en `modes/oferta.md` (**JD archival**).
+
+**Argumentos de comando (#5853):** nunca escribir la URL de la oferta, el slug de la empresa ni la ruta del report en una línea de comandos, ni siquiera entre comillas. Escribir los valores en un archivo JSON con la herramienta de archivos (`{"url": "…", "company": "{company-slug}", "report": "{num}"}`) y ejecutar el comando de abajo: comprueba cada valor (el slug debe cumplir `^[a-z0-9-]+$`) y pasa cada uno al script como argumento propio, sin shell. Un valor que no pasa la comprobación detiene la ejecución: corregir el valor, nunca la comprobación. La regla completa está en `modes/oferta.md` (**Command arguments**).
+
+```bash
+node --input-type=module -e '
+import { readFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+const p = JSON.parse(readFileSync(process.argv[1] ?? 0, "utf8"));
+const fail = msg => { console.error("archive-posting: " + msg); process.exit(1); };
+if (typeof p.url !== "string" || !/^https?:\/\//i.test(p.url)) fail("url must be an http(s) URL");
+const args = ["archive-posting.mjs", p.url];
+if (p.company != null) { if (typeof p.company !== "string" || !/^[a-z0-9-]+$/.test(p.company)) fail("company must match ^[a-z0-9-]+$"); args.push("--company=" + p.company); }
+if (p.report != null) { if (!/^[0-9]+$/.test(String(p.report))) fail("report must be a report number"); args.push("--report=" + p.report); }
+process.exit(spawnSync(process.execPath, args, { stdio: "inherit" }).status ?? 1);
+' {json-file}
+```
 
 **Machine Summary (obligatorio):** YAML fence después del encabezado — mismo schema y reglas que `batch/batch-prompt.md` (fuente de verdad). Incluye `advertised_comp` (cifra textual de la JD o `null`), `risk_summary` (mapa), y `requirement_importance` (tabla del Bloque B fila por fila; tope `inferred` de la puerta se mantiene).
 

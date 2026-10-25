@@ -265,7 +265,23 @@
 (النص الكامل لإعلان الوظيفة، يُلصق حرفياً — انظر المتطلب أدناه)
 ```
 
-**أرشفة الـ JD (إلزامي، #2789):** يجب أن يحتوي كل تقرير على قسم `## Job Description (archived verbatim)` يضم النص الكامل للإعلان كما هو، دون تلخيص أو إعادة صياغة. يبقى العنوان بالإنجليزية لأن `check-jd-archive.mjs` يبحث عنه بالاسم. حقل `**URL:**` ليس أرشيفاً: يتوقف الرابط عن العمل عند إغلاق الإعلان، ولا يعود هناك سبيل لاستعادة المتطلبات الأصلية. السطر الأول من القسم هو تاريخ النشر كما يظهر في المصدر (`Posted: {التاريخ أو العبارة النسبية كما تظهر}`، أو `Posted: not visible in source` إن لم يظهر فعلاً)، ولا يُستبدل أبداً بتاريخ ملف التقرير. إذا كان الـ JD طويلاً جداً أو تعذّر اقتباسه كاملاً، احفظه بالأمر `archive-posting.mjs <url> --company={company-slug} --report={num}` واكتب في القسم **حرفياً** الجملة `See jds/{filename} for the full archive (archive-posting.mjs --report={num}).` دون أي نص آخر. لا تُوضع إعادة صياغة مكان النص؛ القاعدة الكاملة في `modes/oferta.md` (**JD archival**).
+**أرشفة الـ JD (إلزامي، #2789):** يجب أن يحتوي كل تقرير على قسم `## Job Description (archived verbatim)` يضم النص الكامل للإعلان كما هو، دون تلخيص أو إعادة صياغة. يبقى العنوان بالإنجليزية لأن `check-jd-archive.mjs` يبحث عنه بالاسم. حقل `**URL:**` ليس أرشيفاً: يتوقف الرابط عن العمل عند إغلاق الإعلان، ولا يعود هناك سبيل لاستعادة المتطلبات الأصلية. السطر الأول من القسم هو تاريخ النشر كما يظهر في المصدر (`Posted: {التاريخ أو العبارة النسبية كما تظهر}`، أو `Posted: not visible in source` إن لم يظهر فعلاً)، ولا يُستبدل أبداً بتاريخ ملف التقرير. إذا كان الـ JD طويلاً جداً أو تعذّر اقتباسه كاملاً، احفظه بالأمر `archive-posting.mjs` (الأمر أدناه) واكتب في القسم **حرفياً** الجملة `See jds/{filename} for the full archive (archive-posting.mjs --report={num}).` دون أي نص آخر. لا تُوضع إعادة صياغة مكان النص؛ القاعدة الكاملة في `modes/oferta.md` (**JD archival**).
+
+**وسائط الأوامر (#5853):** لا تكتب أبداً رابط الإعلان أو الـ slug الخاص بالشركة أو مسار التقرير داخل سطر أوامر، ولا حتى بين علامات اقتباس. اكتب القيم في ملف JSON بأداة الملفات (`{"url": "…", "company": "{company-slug}", "report": "{num}"}`) ثم شغّل الأمر أدناه: يتحقق من كل قيمة (يجب أن يطابق الـ slug النمط `^[a-z0-9-]+$`) ويمرّر كل قيمة إلى السكربت كوسيط مستقل، دون shell. القيمة التي تفشل في التحقق توقف التشغيل: صحّح القيمة، لا التحقق. القاعدة الكاملة في `modes/oferta.md` (**Command arguments**).
+
+```bash
+node --input-type=module -e '
+import { readFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+const p = JSON.parse(readFileSync(process.argv[1] ?? 0, "utf8"));
+const fail = msg => { console.error("archive-posting: " + msg); process.exit(1); };
+if (typeof p.url !== "string" || !/^https?:\/\//i.test(p.url)) fail("url must be an http(s) URL");
+const args = ["archive-posting.mjs", p.url];
+if (p.company != null) { if (typeof p.company !== "string" || !/^[a-z0-9-]+$/.test(p.company)) fail("company must match ^[a-z0-9-]+$"); args.push("--company=" + p.company); }
+if (p.report != null) { if (!/^[0-9]+$/.test(String(p.report))) fail("report must be a report number"); args.push("--report=" + p.report); }
+process.exit(spawnSync(process.execPath, args, { stdio: "inherit" }).status ?? 1);
+' {json-file}
+```
 
 ### 2. التسجيل في نظام التتبع
 
