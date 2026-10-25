@@ -44,6 +44,8 @@ Follow the Scope section in `modes/apply.md`. Run `node apply-scope.mjs root` an
 
 ## Schritt 3 — Änderungen an der Rolle erkennen
 
+Dieser Schritt gilt nur, solange das Formular noch zur Stelle des Reports gehört: derselbe Arbeitgeber und dieselbe Stelle (`modes/apply.md` → Step 5 → **Posting identity**); der Titel zählt nicht. Passen mehrere Reports zum Unternehmen, zuerst den nehmen, dessen URL oder Req-ID diese Stelle ist, und den Kandidaten fragen, wenn das unklar ist. Ein anderer Arbeitgeber oder eine andere Stelle beim selben Arbeitgeber ist keine Rollenänderung: die Antworten des Reports nie darauf anpassen. Sie als neue Stelle bewerten (Auto-Pipeline, eigener Report) oder Antworten entwerfen, ohne sie in einem Report zu speichern.
+
 Wenn die Rolle auf dem Bildschirm von der bewerteten abweicht:
 - **Den Kandidaten warnen**: "Die Rolle hat sich von [X] zu [Y] geändert. Soll ich neu bewerten oder die Antworten an den neuen Titel anpassen?"
 - **Wenn anpassen**: Antworten ohne Neu-Bewertung an den neuen Titel angleichen
@@ -107,6 +109,8 @@ Hinweise:
 ```
 
 ## Schritt 6 — Nach dem Absenden (optional)
+
+Bevor etwas gespeichert wird, prüfen, dass das Formular noch zur Stelle des Reports gehört (`modes/apply.md` → Step 8 → **Write only to the report of this posting**). Derselbe Arbeitgeber und dieselbe Stelle → die Schritte unten betreffen diesen Report, auch nach einer Anpassung an einen neuen Titel oder einer Neu-Bewertung. Ein anderer Arbeitgeber oder eine andere Stelle → nie dieser Report: den Report verwenden, der für die neue Stelle geschrieben wurde; gibt es keinen, keinen Status setzen, keine Antworten speichern und dem Kandidaten sagen, dass die Bewerbung noch nicht erfasst ist.
 
 Wenn der Kandidat bestätigt, dass die Bewerbung raus ist:
 1. Status mit dem kanonischen CLI auf "Applied" setzen: `node set-status.mjs --report <report#> Applied` (die Tabelle in `applications.md` nie von Hand editieren)

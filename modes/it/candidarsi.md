@@ -39,6 +39,8 @@ Modalità interattiva per quando il candidato compila un modulo di candidatura (
 
 ## Fase 3 -- Rilevare variazioni nel ruolo
 
+Questa fase vale solo finché il modulo è ancora l'annuncio del report: stesso datore di lavoro e stesso annuncio (`modes/apply.md` → Step 5 → **Posting identity**); il titolo non conta. Se più report corrispondono all'azienda, prendere prima quello il cui URL o req ID è questo annuncio, e chiedere al candidato se non è chiaro. Un altro datore di lavoro, o un altro annuncio dello stesso datore di lavoro, non è un cambio di ruolo: non adattarvi mai le risposte del report. Valutarlo come nuovo annuncio (auto-pipeline, report proprio) oppure redigere risposte senza salvarle in alcun report.
+
 Se il ruolo a schermo differisce da quello valutato:
 - **Avvisare il candidato:** "Il ruolo rilevato è [Y], il report fa riferimento a [X]. Vuoi che riesegua la valutazione o che adatti le risposte al nuovo titolo?"
 - **Se adattare:** Aggiornare le risposte al nuovo ruolo senza rieseguire la valutazione completa.
@@ -102,6 +104,8 @@ Note:
 ```
 
 ## Fase 6 -- Dopo la candidatura (opzionale)
+
+Prima di salvare qualsiasi cosa, verificare che il modulo sia ancora l'annuncio del report (`modes/apply.md` → Step 8 → **Write only to the report of this posting**). Stesso datore di lavoro e stesso annuncio → i passi seguenti riguardano questo report, anche dopo un adattamento a un nuovo titolo o una rivalutazione. Altro datore di lavoro o altro annuncio → mai questo report: usare il report scritto per il nuovo annuncio; se non ce n'è nessuno, non impostare alcuno stato, non salvare risposte e dire al candidato che la candidatura non è ancora tracciata.
 
 Se il candidato conferma di aver inviato il modulo:
 1. Aggiornare lo stato ad "Applied" con la CLI canonica: `node set-status.mjs --report <report#> Applied` (non modificare la tabella di `applications.md` a mano).

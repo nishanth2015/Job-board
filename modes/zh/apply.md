@@ -13,7 +13,7 @@
 1. 捕获 (DETECT)    → 用本项目的 Playwright 浏览器打开职位页面
 2. 识别 (IDENTIFY)  → 从页面中提取公司名称与职位名称
 3. 检索 (SEARCH)    → 匹配 reports/ 目录下已保存的评估报告
-4. 载入 (LOAD)      → 读取对应的评估报告及 H 部分的拟答草稿 (若存在)
+4. 载入 (LOAD)      → 读取对应的评估报告、`## Application Answers` 及 H 部分的拟答草稿 (若存在)
 5. 校准 (COMPARE)   → 比对当前屏幕上的职位是否与之前评估的职位完全一致。若有变动，进行提示
 6. 解析 (ANALYZE)   → 识别出页面上所有可见的表单提问输入框
 7. 生成 (GENERATE)  → 结合报告背景与简历 cv.md，为每个问题生成定制草稿
@@ -43,12 +43,14 @@ Follow the Scope section in `modes/apply.md`. Run `node apply-scope.mjs root` an
 1. 提取屏幕或输入信息中的公司名称与职位名称。
 2. 在 `reports/` 目录下搜索对应的评估报告文件（执行大小写不敏感的模糊检索）。
 3. 如果匹配成功，载入完整的评估报告内容。
-4. 检查报告中是否有“维度 H (开放性问题拟答草稿)”，如果有，将其作为回答的基础模板。
+4. 如果报告中有 `## Application Answers` 部分 → 以实际提交过的回答作为基础；否则，如果有“维度 H (开放性问题拟答草稿)”，将其作为回答的基础模板。两者都有时，`## Application Answers` 优先。
 5. 如果未匹配到任何历史报告，告知候选人，并询问是否需要针对此链接快速运行一次 `auto-pipeline` 自动评估流程。
 
 ---
 
 ## 步骤 3 — 校验岗位一致性
+
+本步骤仅在表单仍是该报告对应的职位时适用：同一雇主、同一职位发布（`modes/apply.md` → Step 5 → **Posting identity**）；职位名称不作为判断依据。如果有多份报告与该公司匹配，先选择 URL 或 req ID 与本职位一致的那一份，不确定时询问候选人。不同雇主，或同一雇主的另一个职位，不属于职位变更：绝不要把该报告的回答改写用于它。应将其作为新职位评估（auto-pipeline，生成独立报告），或只起草回答而不保存到任何报告。
 
 如果表单上显示的职位细节（如职级、所属部门）与历史报告存在偏差：
 - **向候选人进行提示**：表现为：“检测到当前的职位已从 [X] 变为 [Y]。需要我重新为您进行一次快速评估，还是直接在当前话术基础上微调适配新职位？”
@@ -70,7 +72,7 @@ Follow the Scope section in `modes/apply.md`. Run `node apply-scope.mjs root` an
 - 文件上传框（上传简历 PDF、自荐信 PDF）。
 
 对每个问题进行归类：
-- **已在维度 H 中有拟答** → 提取并根据当前表单的精细要求进行润色。
+- **已在 `## Application Answers` 或维度 H 中有回答** → 提取并根据当前表单的精细要求进行润色。
 - **新提问** → 根据报告背景分析、STAR故事及 `cv.md` 的量化指标现场撰写。
 
 ---
@@ -112,9 +114,11 @@ Follow the Scope section in `modes/apply.md`. Run `node apply-scope.mjs root` an
 
 ## 步骤 6 — 投递后动作
 
+保存任何内容之前，先确认表单仍是该报告对应的职位（`modes/apply.md` → Step 8 → **Write only to the report of this posting**）。同一雇主、同一职位 → 以下步骤都作用于这份报告，微调适配新职位名称或重新评估之后也一样。不同雇主或不同职位 → 绝不写入这份报告：使用为新职位生成的报告；如果没有，不设置任何状态、不保存回答，并告知候选人这次投递尚未被记录。
+
 当候选人确认已经成功点击“提交申请/投递”后，执行以下清理与建档工作：
 1. 使用规范 CLI 将该职位状态更新为 `Applied`：`node set-status.mjs --report <report#> Applied`（不要手动编辑 `data/applications.md` 表格）。
-2. 将最终实际提交的表单回答归档并更新至该报告的维度 H 模块中，以便后续面试对照。
+2. 将最终实际提交的表单回答写入该报告的 `## Application Answers` 部分，并标注 `**State:** submitted`（格式见 `modes/apply.md` → Step 8），以便后续面试对照。维度 H 保留为评估时的草稿，不作修改。
 3. 推荐下一步行动：引导候选人使用 `/career-ops contacto` 指令生成 LinkedIn 招聘负责人直达勾兑话术。
 
 ---

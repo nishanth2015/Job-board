@@ -44,6 +44,8 @@ Follow the Scope section in `modes/apply.md`. Run `node apply-scope.mjs root` an
 
 ## Step 3 -- 역할 변경 감지
 
+이 단계는 양식이 여전히 report의 공고일 때만 적용됩니다: 같은 고용주이고 같은 공고여야 합니다 (`modes/apply.md` → Step 5 → **Posting identity**). 직함은 따지지 않습니다. 회사와 일치하는 report가 여러 개라면, 먼저 URL이나 req ID가 이 공고인 report를 고르고, 불분명하면 후보자에게 물어보세요. 다른 고용주이거나 같은 고용주의 다른 공고라면 역할 변경이 아닙니다: report의 답변을 거기에 맞춰 조정하지 마세요. 새 공고로 평가하거나 (auto-pipeline, 별도 report), 어떤 report에도 저장하지 않고 답변 초안만 작성하세요.
+
 화면의 역할이 평가한 역할과 다르면:
 - **후보자에게 알림**: "역할이 [X]에서 [Y]로 바뀐 것 같습니다. 새 역할로 다시 평가할까요, 아니면 새 title에 맞춰 답변만 조정할까요?"
 - **조정 선택 시**: 재평가 없이 새 역할에 맞춰 답변을 조정합니다.
@@ -108,6 +110,8 @@ Notes:
 ```
 
 ## Step 6 -- 지원 후 처리 (선택)
+
+무엇이든 저장하기 전에 양식이 여전히 report의 공고인지 확인하세요 (`modes/apply.md` → Step 8 → **Write only to the report of this posting**). 같은 고용주, 같은 공고 → 아래 단계는 이 report에 적용됩니다. 새 직함에 맞춘 조정이나 재평가 후에도 마찬가지입니다. 다른 고용주나 다른 공고 → 절대 이 report가 아닙니다: 새 공고용으로 작성된 report를 사용하고, 그런 report가 없으면 상태를 설정하지 말고 답변도 저장하지 말며, 지원이 아직 추적되지 않는다고 후보자에게 알리세요.
 
 후보자가 지원서를 제출했다고 확인하면:
 1. 정식 CLI로 status를 `Applied`로 변경합니다: `node set-status.mjs --report <report#> Applied` (`data/applications.md` 표를 직접 수정하지 않습니다). TSV 병합은 기존 row의 status를 바꾸지 않습니다.

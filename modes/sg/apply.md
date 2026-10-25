@@ -80,11 +80,13 @@ Notes:
 
 ## Application Answers
 
-Persist exactly as `modes/apply.md` specifies: after the final answers are
-filled into the form or handed to the candidate for copy-paste, update the
-matched report with an additive `## Application Answers` section (recovered
-through the strict reader, never re-read as prose); on confirmed submission,
-refresh it from `filled` to `submitted`.
+Persist exactly as `modes/apply.md` specifies, including its check that the
+form is still the report's posting (Step 8 →
+"Write only to the report of this posting"): after the final answers are filled into the form or handed to the
+candidate for copy-paste, update the matched report with an additive
+`## Application Answers` section (recovered through the strict reader, never
+re-read as prose); on confirmed submission, refresh it from `filled` to
+`submitted`.
 
 ## After applying (optional)
 

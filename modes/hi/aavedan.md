@@ -44,6 +44,8 @@ Follow the Scope section in `modes/apply.md`. Run `node apply-scope.mjs root` an
 
 ## Step 3 -- Role Changes Detect करें
 
+यह step तभी लागू होता है जब form अब भी report वाली posting हो: वही employer और वही posting (`modes/apply.md` → Step 5 → **Posting identity**); title से फ़र्क नहीं पड़ता। अगर company से कई reports match करें, तो पहले वह report लें जिसका URL या req ID यही posting है, और साफ़ न हो तो candidate से पूछें। दूसरा employer, या उसी employer की दूसरी posting, role change नहीं है: report के answers को कभी उस पर adapt न करें। उसे नई posting की तरह evaluate करें (auto-pipeline, अपनी report), या answers draft करें पर किसी report में save न करें।
+
 यदि screen का role evaluated role से अलग हो:
 - **Candidate को alert करें**: "Role [X] से [Y] में change हुआ है। क्या आप चाहते हैं कि मैं reevaluate करूँ या नए title के अनुसार responses adapt करूँ?"
 - **यदि adapt करें**: New role के लिए responses adjust करें बिना reevaluate किए
@@ -110,6 +112,8 @@ Notes:
 ```
 
 ## Step 6 -- Application के बाद (वैकल्पिक)
+
+कुछ भी save करने से पहले check करें कि form अब भी report वाली posting है (`modes/apply.md` → Step 8 → **Write only to the report of this posting**)। वही employer और वही posting → नीचे के steps इसी report पर लागू होते हैं, नए title पर adapt करने या re-evaluate करने के बाद भी। दूसरा employer या दूसरी posting → यह report कभी नहीं: नई posting के लिए लिखी report इस्तेमाल करें; अगर कोई नहीं है, तो कोई status set न करें, कोई answers save न करें, और candidate को बताएँ कि application अभी track नहीं हुई है।
 
 यदि candidate confirm करे कि application submit हो गई:
 1. Status को "Evaluated" से "Applied" में update करें: `node set-status.mjs --report <report#> Applied` (`applications.md` table को हाथ से edit न करें)

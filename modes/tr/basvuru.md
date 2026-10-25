@@ -39,6 +39,8 @@ Aday bir başvuru formunu doldururken çalışan etkileşimli mod. Ekrandakileri
 
 ## Adım 3 — Rol Değişikliğini Tespit Et
 
+Bu adım yalnızca form hâlâ raporun ilanıysa geçerlidir: aynı işveren ve aynı ilan (`modes/apply.md` → Step 5 → **Posting identity**); başlık sayılmaz. Şirketle birden çok rapor eşleşirse önce URL'si veya req ID'si bu ilan olan raporu al, belirsizse adaya sor. Başka bir işveren ya da aynı işverenin başka bir ilanı rol değişikliği değildir: raporun yanıtlarını asla ona uyarlama. Onu yeni bir ilan olarak değerlendir (auto-pipeline, kendi raporu) ya da yanıtları hiçbir rapora kaydetmeden taslak olarak hazırla.
+
 Ekrandaki rol önceki değerlendirmedekinden farklıysa:
 - **Adayı uyar:** "Rol [X]'den [Y]'ye değişmiş görünüyor. Yeniden değerlendireyim mi, yoksa yanıtları yeni başlığa uyarlayayım mı?"
 - **Uyarlama:** Yeniden değerlendirmeden yanıtları yeni role göre ayarla
@@ -103,6 +105,8 @@ Notlar:
 ```
 
 ## Adım 6 — Başvuru Sonrası (isteğe bağlı)
+
+Herhangi bir şey kaydetmeden önce formun hâlâ raporun ilanı olduğunu kontrol et (`modes/apply.md` → Step 8 → **Write only to the report of this posting**). Aynı işveren ve aynı ilan → aşağıdaki adımlar bu rapora uygulanır; yeni başlığa uyarlamadan veya yeniden değerlendirmeden sonra da. Başka işveren veya başka ilan → asla bu rapor değil: yeni ilan için yazılan raporu kullan; yoksa durum ayarlama, yanıt kaydetme ve adaya başvurunun henüz takip edilmediğini söyle.
 
 Aday başvuruyu gönderdiğini onaylarsa:
 1. Durumu kanonik CLI ile `Applied` yap: `node set-status.mjs --report <report#> Applied` (`applications.md` tablosunu elle düzenleme)

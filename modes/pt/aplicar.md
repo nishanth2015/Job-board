@@ -44,6 +44,8 @@ Follow the Scope section in `modes/apply.md`. Run `node apply-scope.mjs root` an
 
 ## Passo 3 -- Detectar mudanças na vaga
 
+Este passo só se aplica enquanto o formulário ainda for a vaga do report: mesmo empregador e mesma vaga (`modes/apply.md` → Step 5 → **Posting identity**); o título não conta. Se vários reports corresponderem à empresa, pegar primeiro aquele cuja URL ou req ID seja esta vaga, e perguntar ao candidato se não estiver claro. Outro empregador, ou outra vaga do mesmo empregador, não é uma mudança de função: nunca adaptar a ela as respostas do report. Avaliá-la como vaga nova (auto-pipeline, report próprio) ou redigir respostas sem salvá-las em nenhum report.
+
 Se a vaga na tela difere da avaliada:
 - **Avisar o candidato**: "A vaga mudou de [X] para [Y]. Quer que eu reavalie ou adapto as respostas ao novo título?"
 - **Se adaptar**: Ajustar as respostas ao novo título sem reavaliar
@@ -107,6 +109,8 @@ Notas:
 ```
 
 ## Passo 6 -- Pós-candidatura (opcional)
+
+Antes de salvar qualquer coisa, verificar que o formulário ainda é a vaga do report (`modes/apply.md` → Step 8 → **Write only to the report of this posting**). Mesmo empregador e mesma vaga → os passos abaixo valem para este report, também depois de uma adaptação a um título novo ou de uma reavaliação. Outro empregador ou outra vaga → nunca este report: usar o report escrito para a nova vaga; se não houver nenhum, não definir status, não salvar respostas e avisar o candidato de que a candidatura ainda não está registrada.
 
 Se o candidato confirmar que enviou a candidatura:
 1. Atualizar status para "Applied" com o CLI canônico: `node set-status.mjs --report <report#> Applied` (não editar a tabela de `applications.md` manualmente)

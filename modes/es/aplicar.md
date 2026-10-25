@@ -44,6 +44,8 @@ Follow the Scope section in `modes/apply.md`. Run `node apply-scope.mjs root` an
 
 ## Paso 3 -- Detectar cambios de rol
 
+Este paso solo aplica mientras el formulario siga siendo la oferta del report: mismo empleador y misma oferta (`modes/apply.md` → Step 5 → **Posting identity**); el título no cuenta. Si varios reports coinciden con la empresa, tomar primero aquel cuya URL o req ID sea esta oferta, y preguntar al candidato si no está claro. Otro empleador, u otra oferta del mismo empleador, no es un cambio de rol: nunca adaptar a ella las respuestas del report. Evaluarla como oferta nueva (auto-pipeline, su propio report) o redactar respuestas sin guardarlas en ningún report.
+
 Si el rol en pantalla difiere del evaluado:
 - **Avisar al candidato**: "El rol ha cambiado de [X] a [Y]. ¿Quieres que reevalúe o que adapte las respuestas al nuevo título?"
 - **Si adaptar**: Ajustar las respuestas al nuevo rol sin reevaluar
@@ -107,6 +109,8 @@ Notas:
 ```
 
 ## Paso 6 -- Tras la candidatura (opcional)
+
+Antes de guardar nada, comprobar que el formulario sigue siendo la oferta del report (`modes/apply.md` → Step 8 → **Write only to the report of this posting**). Mismo empleador y misma oferta → los pasos de abajo actúan sobre este report, también tras adaptar a un título nuevo o reevaluar. Otro empleador u otra oferta → nunca este report: usar el report escrito para la nueva oferta; si no hay ninguno, no poner ningún estado, no guardar respuestas y decir al candidato que la candidatura aún no está registrada.
 
 Si el candidato confirma que la candidatura ha sido enviada:
 1. Actualizar el estado a "Applied" con el CLI canónico: `node set-status.mjs --report <report#> Applied` (no editar la tabla de `applications.md` a mano)

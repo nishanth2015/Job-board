@@ -44,6 +44,8 @@ Follow the Scope section in `modes/apply.md`. Run `node apply-scope.mjs root` an
 
 ## Trin 3 -- Detektér rolleændringer
 
+Dette trin gælder kun, så længe formularen stadig er report'ens opslag: samme arbejdsgiver og samme opslag (`modes/apply.md` -> Step 5 -> **Posting identity**); titlen tæller ikke med. Matcher flere reports virksomheden, så tag først den, hvis URL eller req-ID er dette opslag, og spørg kandidaten, hvis det er uklart. En anden arbejdsgiver eller et andet opslag hos samme arbejdsgiver er ikke en rolleændring: tilpas aldrig report'ens svar til det. Evaluér det som et nyt opslag (auto-pipeline, egen report), eller udarbejd svar uden at gemme dem i nogen report.
+
 Hvis rollen på skærmen afviger fra den evaluerede:
 - **Advar kandidaten**: "Rollen har ændret sig fra [X] til [Y]. Ønsker du, at jeg genevaluerer, eller at jeg tilpasser svarene til den nye titel?"
 - **Hvis tilpas**: Justér svarene til den nye rolle uden at genevaluere
@@ -107,6 +109,8 @@ Noter:
 ```
 
 ## Trin 6 -- Efter ansøgningen (valgfrit)
+
+Før noget gemmes, så tjek, at formularen stadig er report'ens opslag (`modes/apply.md` -> Step 8 -> **Write only to the report of this posting**). Samme arbejdsgiver og samme opslag -> trinene nedenfor gælder denne report, også efter en tilpasning til en ny titel eller en genevaluering. En anden arbejdsgiver eller et andet opslag -> aldrig denne report: brug den report, der blev skrevet til det nye opslag; findes der ingen, så sæt ingen status, gem ingen svar, og fortæl kandidaten, at ansøgningen endnu ikke er registreret.
 
 Hvis kandidaten bekræfter, at ansøgningen er sendt:
 1. Opdatér status til "Applied" med det kanoniske CLI: `node set-status.mjs --report <report#> Applied` (redigér ikke `applications.md`-tabellen i hånden)

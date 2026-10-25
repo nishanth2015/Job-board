@@ -44,6 +44,8 @@ Follow the Scope section in `modes/apply.md`. Run `node apply-scope.mjs root` an
 
 ## Langkah 3 -- Deteksi perubahan role
 
+Langkah ini hanya berlaku selama formulir masih lowongan dari report: pemberi kerja yang sama dan lowongan yang sama (`modes/apply.md` → Step 5 → **Posting identity**); judul tidak dihitung. Jika beberapa report cocok dengan perusahaan, ambil dulu report yang URL atau req ID-nya adalah lowongan ini, dan tanyakan kandidat jika belum jelas. Pemberi kerja lain, atau lowongan lain di pemberi kerja yang sama, bukan perubahan role: jangan pernah menyesuaikan jawaban report ke sana. Evaluasi sebagai lowongan baru (auto-pipeline, report sendiri), atau susun jawaban tanpa menyimpannya ke report mana pun.
+
 Jika role di layar berbeda dari yang dievaluasi:
 - **Beri peringatan kepada kandidat**: "Role berubah dari [X] menjadi [Y]. Mau saya evaluasi ulang atau menyesuaikan jawaban dengan jabatan baru?"
 - **Jika menyesuaikan**: Sesuaikan jawaban dengan role baru tanpa evaluasi ulang
@@ -107,6 +109,8 @@ Catatan:
 ```
 
 ## Langkah 6 -- Setelah melamar (opsional)
+
+Sebelum menyimpan apa pun, pastikan formulir masih lowongan dari report (`modes/apply.md` → Step 8 → **Write only to the report of this posting**). Pemberi kerja dan lowongan sama → langkah di bawah berlaku untuk report ini, juga setelah penyesuaian ke judul baru atau evaluasi ulang. Pemberi kerja lain atau lowongan lain → jangan pernah report ini: gunakan report yang ditulis untuk lowongan baru; jika tidak ada, jangan set status, jangan simpan jawaban, dan beri tahu kandidat bahwa lamaran ini belum tercatat.
 
 Jika kandidat mengonfirmasi lamaran sudah dikirim:
 1. Perbarui status dari "Evaluated" menjadi "Applied" dengan `node set-status.mjs --report <report#> Applied` (jangan mengedit tabel `applications.md` secara manual)
