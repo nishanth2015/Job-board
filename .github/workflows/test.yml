@@ -68,6 +68,12 @@ jobs:
       # Skip the postinstall (npx playwright install chromium); the tests
       # never launch a browser, so the ~170 MB download is pure CI overhead.
       - run: npm install --ignore-scripts
+      # dependency-review judges only a PR's own diff; this audits the full
+      # resolved tree the suite is about to run against, the class of finding
+      # #5008/#4667 were filed to clear. The root tracks no lockfile (ranges
+      # resolve at install time), so this must run after the install above.
+      # high+ matches dependency-review's fail-on-severity.
+      - run: npm audit --audit-level=high
       - run: node test-all.mjs --quick
       - name: Go dashboard tests
         run: go test ./...
