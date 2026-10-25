@@ -40,7 +40,13 @@ const ALLOWED_HOSTS = new Set([
 // ── CLI args ─────────────────────────────────────────────────────────
 
 const args = process.argv.slice(2);
-const get = (flag) => { const i = args.indexOf(flag); return i !== -1 ? args[i + 1] : null; };
+const get = (flag) => {
+  const i = args.indexOf(flag);
+  if (i !== -1) return args[i + 1] ?? null;
+  const prefix = `${flag}=`;
+  const inline = args.find(arg => arg.startsWith(prefix));
+  return inline ? inline.slice(prefix.length) : null;
+};
 
 const applyUrl  = get('--url');
 const pdfPath   = get('--pdf');

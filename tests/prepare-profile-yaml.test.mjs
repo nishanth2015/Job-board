@@ -29,6 +29,17 @@ try {
   check('plain scalar YAML retains existing prefill behavior', () => {
     assert.equal(plain.status, 0, plain.stderr); assert.match(plain.stdout, /last_name\s+Example\n/); assert.ok(plain.stdout.includes('alex@example.invalid'));
   });
+  writeFileSync(join(root, 'config', 'profile.yml'), 'full_name: Alex Example\n');
+  const inlineUrl = spawnSync(process.execPath, [
+    join(ROOT, 'prepare-application.mjs'),
+    '--url=https://boards.greenhouse.io/fictional/jobs/1',
+    '--pdf', 'output/fictional.pdf',
+  ], { env, encoding: 'utf8' });
+  check('--url=value accepts the same URL as the split argument form', () => {
+    assert.equal(inlineUrl.status, 0, inlineUrl.stderr);
+    assert.match(inlineUrl.stdout, /greenhouse/);
+    assert.match(inlineUrl.stdout, /fictional/);
+  });
   const invalid = run('full_name: [unclosed\n');
   check('malformed YAML fails rather than presenting fabricated fields', () => {
     assert.equal(invalid.status, 1); assert.match(invalid.stderr, /profile.*YAML/i);
