@@ -1456,6 +1456,18 @@ func (m PipelineModel) renderSearchBar() string {
 	return style.Render(prompt + " " + display + matchInfo + hint)
 }
 
+// avgScoreLabel is the header's average score, or "—" when no row has a
+// score. AvgScore is averaged over scored rows only and every score is above
+// zero, so it is positive exactly when there is one; printed as "0.0" it read
+// as a pipeline that had been scored and scored nothing, a mean taken over no
+// values.
+func avgScoreLabel(avg float64) string {
+	if avg > 0 {
+		return fmt.Sprintf("%.1f", avg)
+	}
+	return "—"
+}
+
 func (m PipelineModel) renderHeader() string {
 	style := lipgloss.NewStyle().
 		Bold(true).
@@ -1465,8 +1477,7 @@ func (m PipelineModel) renderHeader() string {
 		Padding(0, 2)
 
 	right := lipgloss.NewStyle().Foreground(m.theme.Subtext)
-	avg := fmt.Sprintf("%.1f", m.metrics.AvgScore)
-	info := right.Render(fmt.Sprintf(i18n.Current.OffersSummary, m.metrics.Total, avg))
+	info := right.Render(fmt.Sprintf(i18n.Current.OffersSummary, m.metrics.Total, avgScoreLabel(m.metrics.AvgScore)))
 
 	title := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Blue).Render(i18n.Current.AppTitle)
 	gap := m.width - lipgloss.Width(title) - lipgloss.Width(info) - 4
