@@ -1776,19 +1776,27 @@ func (m PipelineModel) renderPostedCell(app model.CareerApplication, width int) 
 	if app.PostedOn == "" {
 		return lipgloss.NewStyle().Foreground(m.theme.Subtext).Width(width).Render("—")
 	}
-	posted, err := time.Parse("2006-01-02", app.PostedOn)
+	// Local calendar days against the dashboard's own clock, the way
+	// FormatTimeAgo counts them for the label in this same cell. time.Parse
+	// read the date as UTC midnight and compared it with the real time.Now(),
+	// so east of UTC a posting dated today was "in the future" until the UTC
+	// date caught up, and got the dash meant for bad data, while its label
+	// would have said "today".
+	posted, err := time.ParseInLocation("2006-01-02", app.PostedOn, time.Local)
 	if err != nil {
 		return lipgloss.NewStyle().Foreground(m.theme.Subtext).Width(width).Render("—")
 	}
+	now := i18n.NowFunc()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
 	// A requisition cannot have gone live in the future. Such a date is bad data
 	// (a typo, or a provider field that isn't the posting date at all), and it
-	// would otherwise read as the freshest possible req: time.Since is negative,
-	// which lands in the first case below and paints it green — the one colour
-	// that says "act on this now".
-	if posted.After(time.Now()) {
+	// would otherwise read as the freshest possible req: a negative age lands in
+	// the first case below and paints it green — the one colour that says "act
+	// on this now".
+	if posted.After(today) {
 		return lipgloss.NewStyle().Foreground(m.theme.Subtext).Width(width).Render("—")
 	}
-	days := int(time.Since(posted).Hours() / 24)
+	days := int(math.Round(today.Sub(posted).Hours() / 24))
 	color := m.theme.Red
 	switch {
 	case days <= postedFreshDays:
