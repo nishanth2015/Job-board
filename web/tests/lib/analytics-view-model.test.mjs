@@ -127,6 +127,24 @@ test("an Unknown-only breakdown is not rendered as an insight", () => {
   assert.equal(remote.partial, true);
 });
 
+test("a breakdown bucket nothing was submitted from has no conversion rate", () => {
+  // The core's withOutcomeRates() reports conversionRate 0 over submitted 0: a
+  // bucket of only Evaluated and SKIP rows. Rendered, that is a confident "0%"
+  // beside buckets with real outcomes. The row and its count stay; the rate is
+  // absent.
+  const m = statsModel({
+    archetypeBreakdown: [
+      { archetype: "AI & ML Engineering", total: 5, submitted: 5, positive: 2, conversionRate: 40 },
+      { archetype: "Data & Analytics", total: 7, submitted: 0, positive: 0, conversionRate: 0 },
+    ],
+  });
+  const rows = m.sections.find((s) => s.key === "archetype").rows;
+  assert.equal(rows.length, 2, "the empty bucket still shows its count");
+  assert.equal(rows[0].conversionRate, 40);
+  assert.equal(rows[1].conversionRate, null);
+  assert.equal(rows[1].total, 7);
+});
+
 test("the ATS panel makes no claim below the core's own sample bar", () => {
   const thin = statsModel({
     vendorAnalysis: { identified: 0, minSampleForClaim: 8, coveragePct: 0, breakdown: [], overallAdvanceRate: 38 },

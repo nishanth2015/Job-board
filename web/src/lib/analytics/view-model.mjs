@@ -167,7 +167,16 @@ export function statsModel(patterns) {
     const list = Array.isArray(rows) ? rows.filter((r) => Number.isFinite(r?.total) && r.total > 0) : [];
     const named = list.filter((r) => !isUnlabelled(r?.[dim]));
     if (named.length === 0) continue;
-    sections.push({ key, label, rows: list, dimension: dim, partial: named.length < list.length });
+    // A bucket nothing was submitted from has no conversion rate. The core
+    // (withOutcomeRates in analyze-patterns.mjs) reports `conversionRate: 0`
+    // over `submitted: 0`, so a bucket of only Evaluated and SKIP rows read as
+    // a confident "0%" beside buckets with real outcomes. The row stays, with
+    // its count, and the rate is absent, as the vendor rows below do it.
+    const withRates = list.map((r) => ({
+      ...r,
+      conversionRate: Number(r?.submitted) > 0 ? r.conversionRate : NO_RATE,
+    }));
+    sections.push({ key, label, rows: withRates, dimension: dim, partial: named.length < list.length });
   }
 
   // Per-ATS advance rate. The core states the sample it needs and how much of
