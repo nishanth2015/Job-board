@@ -413,12 +413,67 @@ function loadContext() {
   };
 }
 
-export function buildSystemPrompt(modeContent, ctx) {
+// The mode files are written for Claude Code, which has Playwright, WebFetch,
+// Bash and file reads. This runner sends no `tools`, so a model that follows
+// them answers with tool calls and no evaluation (#5809). Say so before them,
+// and drop the parts that tell the model to use tools.
+function noToolsNote(evaluate) {
+  return [
+    'RUNNER NOTE: you have no tools in this run.',
+    // Only evaluate sends a posting; apply sends an evaluation report.
+    evaluate
+      ? 'The job text is in the user message and the CV is below.'
+      : 'Everything you need is in the user message and the CV below.',
+    'Do not navigate, fetch, read files or run commands, and ignore any instruction below to do so.',
+  ].join('\n');
+}
+
+// Matched by heading, not line number, so edits to modes/ don't move them. A
+// section runs to the next heading of the same or a higher level, or to its
+// `until` line. A heading that is gone leaves the text as it was.
+const TOOL_SECTIONS = [
+  '## Liveness gate (URL inputs)',
+  '## Bounded Research Budget',
+  '### Tools',
+  // Stops before the agency-confirmation rule, which the runner keeps.
+  { heading: '### Subagent delegation (cost guardrail)', until: '<!-- guardrail:agency-confirmation -->' },
+  '### Prior-contact FYI (non-scoring)',
+  '### 1b. Embed ATS keyword coverage',
+  '### 2. Record in tracker',
+  '### 3. Salary observations (desired ask only)',
+];
+// Single lines that tell the model to run a command or search, by how they start.
+const TOOL_LINES = [
+  '1b. **First evaluation of each session:** Run `node cv-sync-check.mjs`',
+  '4. Use WebSearch for comp and company data',
+  '- Search: `"{company}"',
+  '- `{###}` = next sequential number',
+];
+const READ_CV_RULE = '**RULE: NEVER hardcode metrics from proof points.**';
+
+export function stripToolInstructions(text) {
+  let lines = text.split('\n');
+  for (const section of TOOL_SECTIONS) {
+    const { heading, until } = typeof section === 'string' ? { heading: section } : section;
+    const start = lines.findIndex(l => l.trimEnd() === heading);
+    if (start === -1) continue;
+    const level = heading.match(/^#+/)[0].length;
+    const next = lines.findIndex((l, i) => i > start
+      && (new RegExp(`^#{1,${level}} `).test(l) || (until !== undefined && l.trimEnd() === until)));
+    lines.splice(start, (next === -1 ? lines.length : next) - start);
+  }
+  lines = lines.filter(l => !TOOL_LINES.some(p => l.startsWith(p)));
+  lines = lines.map(l => (l.startsWith(READ_CV_RULE) ? `${READ_CV_RULE} Take them from the CV below.` : l));
+  return lines.join('\n');
+}
+
+export function buildSystemPrompt(modeContent, ctx, { evaluate = false } = {}) {
   const languageInstruction = outputLanguageInstruction(parseOutputLanguage(ctx.profile));
   return [
-    ctx.shared,
+    noToolsNote(evaluate),
+    stripToolInstructions(ctx.shared),
     ctx.profileMode,
-    modeContent,
+    stripToolInstructions(modeContent),
     '---',
     'CANDIDATE PROFILE (YAML):',
     ctx.profile,
@@ -737,7 +792,7 @@ async function cmdEvaluate(input, ctx) {
   }
 
   console.log('\nEvaluating...');
-  const systemPrompt = buildSystemPrompt(modeContent, ctx);
+    const systemPrompt = buildSystemPrompt(modeContent, ctx, { evaluate: true });
 
   let resultObj;
   try {
