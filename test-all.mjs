@@ -16826,7 +16826,12 @@ try {
     ["merge-tracker.mjs writes the cell through formatUrlCell", /put\('url', formatUrlCell\(/.test(mergeSrc)],
     ["merge-tracker.mjs reads the href before keying", /url: COLMAP\.url != null \? extractCellUrl\(/.test(mergeSrc)],
     ["tracker-parse.mjs returns the href on parsed rows", /url: extractCellUrl\(at\('url'\)\)/.test(parseSrc)],
-    ["the Go dashboard extracts the href", /func extractCellURL\(/.test(goCareerSrc) && /JobURL:\s+extractCellURL\(at\("url"\)\)/.test(goCareerSrc)],
+    // JobURL goes through trackerPostingURL, which reads the cell with
+    // extractCellURL and then drops a "—"/"N/A"/local:jds/ value that names no
+    // posting: kept, it switched off every JobURL enrichment tier.
+    ["the Go dashboard extracts the href", /func extractCellURL\(/.test(goCareerSrc)
+      && /JobURL:\s+trackerPostingURL\(at\("url"\)\)/.test(goCareerSrc)
+      && /func trackerPostingURL\(cell string\) string \{\s*value := extractCellURL\(cell\)/.test(goCareerSrc)],
     // history-ats-seeds reads the cell directly rather than through
     // parseTrackerRow, so it is listed on its own.
     ["history-ats-seeds.mjs extracts the href", /extractCellUrl\(cells\[columns\.url\]\)/.test(historySeedsSrc)],
