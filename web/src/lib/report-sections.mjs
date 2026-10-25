@@ -114,7 +114,9 @@ export const APPLY_LINE = 4.0;
 /** @param {unknown} legitimacy */
 function flaggedPosting(legitimacy) {
   const s = String(legitimacy ?? "").toLowerCase();
-  return /caut|precau|suspic|sospech|scam|fake/.test(s);
+  // Chinese reports (modes/zh/oferta.md, modes/zh-TW/oferta.md) write the tier in
+  // Chinese: 谨慎推进 / 審慎推進 (caution), 疑似虚假 / 疑似虛假 (suspicious).
+  return /caut|precau|suspic|sospech|scam|fake|谨慎|審慎|疑似/.test(s);
 }
 
 /**
@@ -131,6 +133,21 @@ export function applyLineLabel(score, legitimacy) {
   if (!Number.isFinite(n)) return null;
   if (n < APPLY_LINE) return "Below the apply line";
   return flaggedPosting(legitimacy) ? "Check the posting first" : "Recommended";
+}
+
+/**
+ * Block-G legitimacy tier → badge tone. Matches the same localized tiers as
+ * flaggedPosting (English, Spanish, Chinese).
+ *
+ * @param {string} l
+ * @returns {"good" | "warn" | "bad" | "muted"}
+ */
+export function legitimacyTone(l) {
+  const s = l.toLowerCase();
+  if (s.includes("high") || s.includes("confian") || s.includes("legit") || s.includes("高置信") || s.includes("高信心")) return "good";
+  if (s.includes("caution") || s.includes("precau") || s.includes("caut") || s.includes("谨慎") || s.includes("審慎")) return "warn";
+  if (s.includes("suspic") || s.includes("sospech") || s.includes("scam") || s.includes("fake") || s.includes("疑似")) return "bad";
+  return "muted";
 }
 
 /**
