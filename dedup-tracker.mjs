@@ -16,7 +16,7 @@ import { readFileSync, copyFileSync, existsSync, mkdirSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import { getCareerOpsRoot, resolveTrackerPath } from './path-resolver.mjs';
-import { postingUrlRelation } from './url-key.mjs';
+import { postingUrlRelation, normalizeUrl } from './url-key.mjs';
 import {
   openTrackerTransaction, rebuildRow, normalizeCompany, companiesMatchIgnoringCorporateForm,
   MIN_STEM_CHARS, loadCanonicalStates, resolveCanonicalStateId, resolveCanonicalState,
@@ -539,6 +539,24 @@ for (const [company, companyEntries] of groups) {
         lines[lineIdx] = rebuildRow(parts);
         keeper.notes = mergedNotes;
         console.log(`  📝 #${keeper.num}: notes merged`);
+      }
+    }
+
+    // Carry over a posting URL the keeper lacks. The URL cell is the
+    // deterministic dedup key (#3516): left on a deleted row it went with it,
+    // and the surviving row, often the Applied one whose status was just
+    // promoted onto it, fell back to fuzzy company+role matching from then on.
+    // Cluster members never name two different postings (urlsConflict vetoes
+    // that), so the first URL found is this posting's. The donor's raw cell is
+    // copied, so a `[label](href)` link stays a link.
+    if (COLMAP.url != null && !normalizeUrl(keeper.url) && keeper.lineIdx !== undefined) {
+      const donor = cluster.slice(1).find(e => e.lineIdx !== undefined && normalizeUrl(e.url));
+      if (donor) {
+        const parts = lines[keeper.lineIdx].split('|').map(s => s.trim());
+        parts[COLMAP.url] = lines[donor.lineIdx].split('|').map(s => s.trim())[COLMAP.url];
+        lines[keeper.lineIdx] = rebuildRow(parts);
+        keeper.url = donor.url;
+        console.log(`  🔗 #${keeper.num}: posting URL kept from #${donor.num}`);
       }
     }
 
