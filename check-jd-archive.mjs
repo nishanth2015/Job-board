@@ -83,7 +83,7 @@ import { getCareerOpsRoot } from './path-resolver.mjs';
 import { resolveColumns, parseTrackerRow, extractTrackerReportNumbers } from './tracker-parse.mjs';
 import { loadCanonicalStates, resolveCanonicalState, resolveTrackerPath } from './tracker-utils.mjs';
 import { isMainModule } from './lib/is-main-module.mjs';
-import { JD_HEADING_RE, NEXT_REPORT_SECTION_RE } from './lib/jd-archive-section.mjs';
+import { JD_ARCHIVE_HEADING, JD_HEADING_RE, NEXT_REPORT_SECTION_RE } from './lib/jd-archive-section.mjs';
 
 const CAREER_OPS = dirname(fileURLToPath(import.meta.url));
 const DATA_ROOT = getCareerOpsRoot();
@@ -156,6 +156,59 @@ export function parseReportFilename(filename) {
 // alone.
 const UNFILLED_TEMPLATE_PLACEHOLDER =
   "(the posting's full text, pasted verbatim — see requirement below)";
+
+// Every localized evaluation mode (modes/<lang>/*.md) carries its own
+// translation of that placeholder under the same heading, and each one clears
+// MIN_ARCHIVE_CHARS too. The set is read from the templates themselves rather
+// than copied here, so a new locale or a reworded placeholder cannot drift out
+// of it. A placeholder is the parenthesized line (ASCII or full-width
+// parentheses, for the CJK templates) directly under the heading. The English
+// constant stays in the set even when modes/ cannot be read.
+const PLACEHOLDER_LINE_RE = /^[(（].*[)）]$/;
+
+// Whitespace-insensitive, so a placeholder re-wrapped or re-indented on paste
+// is still recognized.
+const normalizePlaceholder = (text) => text.replace(/\s+/g, ' ').trim();
+
+export function collectTemplatePlaceholders(modesDir) {
+  const placeholders = new Set([normalizePlaceholder(UNFILLED_TEMPLATE_PLACEHOLDER)]);
+  const files = [];
+  try {
+    for (const entry of readdirSync(modesDir, { withFileTypes: true })) {
+      const path = join(modesDir, entry.name);
+      if (entry.isFile() && entry.name.endsWith('.md')) {
+        files.push(path);
+      } else if (entry.isDirectory()) {
+        for (const name of readdirSync(path)) {
+          if (name.endsWith('.md')) files.push(join(path, name));
+        }
+      }
+    }
+  } catch {
+    return placeholders;
+  }
+  for (const file of files) {
+    let lines;
+    try {
+      lines = readFileSync(file, 'utf-8').split(/\r?\n/);
+    } catch {
+      continue;
+    }
+    lines.forEach((line, i) => {
+      const next = (lines[i + 1] ?? '').trim();
+      if (line.trim() === JD_ARCHIVE_HEADING && PLACEHOLDER_LINE_RE.test(next)) {
+        placeholders.add(normalizePlaceholder(next));
+      }
+    });
+  }
+  return placeholders;
+}
+
+let templatePlaceholders = null;
+function isUnfilledTemplatePlaceholder(strippedSection) {
+  templatePlaceholders ??= collectTemplatePlaceholders(join(CAREER_OPS, 'modes'));
+  return templatePlaceholders.has(normalizePlaceholder(strippedSection));
+}
 
 // modes/oferta.md documents a second legitimate shape for this section: a
 // pointer to a jds/ capture in place of the verbatim text, for a JD too long
@@ -312,7 +365,7 @@ export function detectJdSectionMarker(content) {
 export function hasEmbeddedJdArchive(content) {
   const stripped = extractStrippedJdSection(content);
   if (stripped === null) return false;
-  if (stripped === UNFILLED_TEMPLATE_PLACEHOLDER) return false;
+  if (isUnfilledTemplatePlaceholder(stripped)) return false;
   if (isPathOnlyPointer(stripped)) return false;
   if (detectJdSectionMarker(content)) return false;
   return stripped.length >= MIN_ARCHIVE_CHARS;
@@ -710,6 +763,39 @@ function runSelfTest() {
   check(!hasEmbeddedJdArchive(
     "## Job Description (archived verbatim)\n(the posting's full text, pasted verbatim — see requirement below)\n\n## Machine Summary"),
     'hasEmbeddedJdArchive rejects the unfilled modes/oferta.md template placeholder even though it exceeds MIN_ARCHIVE_CHARS by length alone (CodeRabbit, PR #2791)');
+  check(!hasEmbeddedJdArchive(
+    "## Job Description (archived verbatim)\n(the posting's full text,\n   pasted verbatim — see requirement below)\n\n## Machine Summary"),
+    'hasEmbeddedJdArchive rejects the English placeholder when it was re-wrapped on paste');
+  check(!hasEmbeddedJdArchive(
+    '## Job Description (archived verbatim)\n（职位描述全文，逐字粘贴——见下方要求）\n\n## Machine Summary'),
+    'hasEmbeddedJdArchive rejects the unfilled modes/zh/oferta.md placeholder, read from the template itself (full-width parentheses)');
+  check(!hasEmbeddedJdArchive(
+    '## Job Description (archived verbatim)\n(der vollständige Text der Stellenanzeige, wortgleich eingefügt — siehe Anforderung unten)\n\n## Machine Summary'),
+    'hasEmbeddedJdArchive rejects the unfilled modes/de/angebot.md placeholder, read from the template itself');
+  {
+    // A locale added after this checker was written is picked up from its
+    // template alone: no list in the checker to update.
+    const modesDir = mkdtempSync(join(tmpdir(), 'jd-archive-placeholders-'));
+    try {
+      mkdirSync(join(modesDir, 'tr'));
+      writeFileSync(join(modesDir, 'tr', 'is-ilani.md'),
+        '```markdown\n## Job Description (archived verbatim)\n(ilanın tam metni, olduğu gibi yapıştırılır — aşağıdaki gereksinime bakın)\n```\n');
+      mkdirSync(join(modesDir, 'xx'));
+      writeFileSync(join(modesDir, 'xx', 'guide.md'),
+        '## Job Description (archived verbatim)\nThis heading is followed by prose, not a placeholder, so nothing is collected.\n');
+      const found = collectTemplatePlaceholders(modesDir);
+      check(found.has('(ilanın tam metni, olduğu gibi yapıştırılır — aşağıdaki gereksinime bakın)'),
+        'collectTemplatePlaceholders reads a Turkish placeholder from a modes/tr template');
+      check(found.has("(the posting's full text, pasted verbatim — see requirement below)"),
+        'collectTemplatePlaceholders always keeps the English placeholder');
+      check(found.size === 2,
+        'collectTemplatePlaceholders collects only parenthesized lines directly under the heading');
+      check(collectTemplatePlaceholders(join(modesDir, 'missing')).size === 1,
+        'collectTemplatePlaceholders falls back to the English placeholder when modes/ cannot be read');
+    } finally {
+      rmSync(modesDir, { recursive: true, force: true });
+    }
+  }
   check(!hasEmbeddedJdArchive(
     '## Job Description (archived verbatim)\n\nSee jds/042-acme-corp-2026-01-15.md for the full archive (archive-posting.mjs --report=042).\n\n## Machine Summary'),
     'hasEmbeddedJdArchive does not credit a path-only pointer sentence as embedded text, even though it clears MIN_ARCHIVE_CHARS by length alone — the pointer must resolve via findCaptureForReport instead (CodeRabbit, PR #2791)');
