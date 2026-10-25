@@ -295,6 +295,15 @@ export function classifyLiveness({ status = 0, requestedUrl = '', finalUrl = '',
   if (status === 403 || status === 429 || status === 503) {
     return { result: 'uncertain', code: 'access_blocked', reason: `HTTP ${status} (access blocked, likely anti-bot)` };
   }
+  // 401 and 451 refuse the REQUEST, not the posting: a sign-in wall, and a
+  // posting withheld for legal reasons, usually by region. AGENTS.md: "a
+  // login/error page is unconfirmed, not closed". Both bodies are short error
+  // pages, so they fell through to insufficient_content and read as expired,
+  // which scan --verify writes as skipped_expired and later scans dedup-skip.
+  if (status === 401 || status === 451) {
+    const why = status === 401 ? 'sign-in required' : 'unavailable for legal reasons, usually by region';
+    return { result: 'uncertain', code: 'access_blocked', reason: `HTTP ${status} (${why})` };
+  }
   // Any other 5xx is a transient origin error (502/504 gateway hiccups, 500s
   // during deploys), not evidence the posting is gone. Without this guard the
   // short error body ("502 Bad Gateway / nginx") falls through to the
