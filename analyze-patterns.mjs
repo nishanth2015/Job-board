@@ -350,7 +350,10 @@ function buildViaChannelAnalysis(submitted, isAdvanced, minSample = MIN_VENDOR_N
   const isDirect = (v) => v === '—' || v === '-';
   const agencySubmitted = submitted.filter(e => { const v = viaOf(e); return v !== '' && !isDirect(v); });
   const directSubmitted = submitted.filter(e => isDirect(viaOf(e)));
-  const rate = (arr) => (arr.length > 0 ? Math.round((arr.filter(isAdvanced).length / arr.length) * 100) : 0);
+  // null, not 0, for a channel nothing went through, as decidedRate is: a
+  // "direct 0 apps 0% advance" line reads as a channel that was tried and
+  // failed, for a user who simply applies through agencies.
+  const rate = (arr) => (arr.length > 0 ? Math.round((arr.filter(isAdvanced).length / arr.length) * 100) : null);
 
   const byAgency = new Map();
   for (const e of agencySubmitted) {
@@ -1766,8 +1769,10 @@ function printSummary(result) {
   if (via && (via.breakdown.length > 0 || via.directSubmitted > 0)) {
     console.log('\nVIA CHANNEL ANALYSIS (agency vs direct, #1596)');
     console.log('-'.repeat(40));
-    console.log(`  direct  ${String(via.directSubmitted).padStart(3)} apps  ${String(via.directAdvanceRate).padStart(3)}% advance`);
-    console.log(`  agency  ${String(via.agencySubmitted).padStart(3)} apps  ${String(via.agencyAdvanceRate).padStart(3)}% advance`);
+    // A channel with no submissions has no rate; "—" keeps the column aligned.
+    const pct = (r) => (r == null ? '   —' : `${String(r).padStart(3)}%`);
+    console.log(`  direct  ${String(via.directSubmitted).padStart(3)} apps  ${pct(via.directAdvanceRate)} advance`);
+    console.log(`  agency  ${String(via.agencySubmitted).padStart(3)} apps  ${pct(via.agencyAdvanceRate)} advance`);
     if (via.unknownVia > 0) {
       console.log(`  unknown ${String(via.unknownVia).padStart(3)} apps  (no Via recorded — not counted in either channel)`);
     }
