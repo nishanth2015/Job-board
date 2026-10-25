@@ -1190,6 +1190,8 @@ search_queries:
 #   comeet          api: https://www.comeet.co/careers-api/2.0/company/<uid>/positions?token=<token>
 #   personio        <slug>.jobs.personio.(de|com)
 #   pinpoint        <slug>.pinpointhq.com
+#   clearcompany    careers-api.clearcompany.com/v1/<siteId>  (or the careers page's embed script
+#                   careers-content.clearcompany.com/js/v1/career-site.js?siteId=<siteId>)
 #   prevueaps       <tenant>.prevueaps.ca  (or api: field; domainId resolved from the tenant's /jobs/ page)
 #   rippling        ats.rippling.com/<slug>/jobs
 #   dover           app.dover.com/<Company>/careers/<board-uuid>
@@ -1304,6 +1306,13 @@ search_queries:
 #
 # - name: Example Breezy Co
 #   careers_url: https://exampleco.breezy.hr              # any *.breezy.hr host
+#   enabled: true
+#
+# - name: Example ClearCompany Co
+#   careers_url: https://careers-api.clearcompany.com/v1/00000000-0000-4000-8000-000000000000
+#                          # the siteId GUID from the careers page's embed script
+#                          # (career-site.js?siteId=...); that script URL works too
+#   max_pages: 20          # optional page cap (100 jobs/page, default 20, max 300)
 #   enabled: true
 #
 # - name: Example Pinpoint Co
