@@ -62,9 +62,10 @@ function fakeArchiveCodeRoot() {
     'set-status.mjs', 'path-resolver.mjs', 'tracker-utils.mjs', 'pipeline-lock.mjs',
     'tracker-parse.mjs', 'lib/local-today.mjs', 'role-matcher.mjs',
     'session-activity.mjs', 'lib/is-main-module.mjs', 'check-jd-archive.mjs',
-    'jd-capture.mjs', 'lib/cli-flags.mjs', 'templates/states.yml',
+    'jd-capture.mjs', 'lib/cli-flags.mjs', 'lib/jd-archive-section.mjs', 'templates/states.yml',
     'tracker-aliases.json', 'lib/dir-lock.mjs', 'lib/run-bounded.mjs', 'lib/status-hooks.mjs',
-    'lib/yaml-document.mjs',
+    'lib/yaml-document.mjs', 'funnel-velocity.mjs', 'stats.mjs', 'followup-cadence.mjs', 'funnel-stages.mjs',
+    'lib/scan-history-columns.mjs', 'lib/tsv-formula-escape.mjs',
   ]) copyFileSync(join(ROOT, file), join(codeRoot, file));
   writeFileSync(join(codeRoot, 'archive-posting.mjs'), [
     "import { writeFileSync } from 'node:fs';",
