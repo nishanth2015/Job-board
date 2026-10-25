@@ -202,6 +202,11 @@ function isLinkableDestination(href) {
   return depth === 0;
 }
 
+// URL cells that say "no URL" in words: the tracker's em-dash and hyphen
+// empty-cell markers and N/A. --backfill-urls fills these from the report the
+// way it fills an empty cell.
+const URL_PLACEHOLDER_RE = /^(?:—|-|n\/a)$/i;
+
 /**
  * Render the tracker's URL cell (#3516).
  *
@@ -1608,7 +1613,15 @@ export async function mergeTracker(options = {}) {
         // Rebuilt, not returned verbatim — a row can carry a URL and STILL be short
         // of the header on a layout with user-owned columns after `URL`. Returning
         // `line` there leaves the same unreadable row this fix exists to prevent.
-        if ((app.url || '').trim()) { already++; return buildRow({ ...app }); }
+        // A placeholder is not a URL. `—` (the tracker's empty-cell marker on a
+        // hand-added row) and `N/A` (a recruiter-sourced role) name no posting,
+        // and normalizeUrl() reads both as "no key"; counted as already set,
+        // such a row was never filled even when its report names the posting.
+        // Anything else the cell holds (a URL, a local:jds/ pointer) is the
+        // user's and stays.
+        const urlCell = (app.url || '').trim();
+        const unset = urlCell === '' || URL_PLACEHOLDER_RE.test(urlCell);
+        if (!unset) { already++; return buildRow({ ...app }); }
         // Shared derivation with the merge loop — one place that knows how to turn a
         // report link into the posting URL. Tracker links may be root-relative
         // (`reports/...`) or data-relative (`../reports/...`); both resolve.
@@ -1630,8 +1643,10 @@ export async function mergeTracker(options = {}) {
         // The DELIMITER is added, never a value: buildRow writes `put('url', '')`,
         // and an empty URL falls back to the report-number and fuzzy company+role
         // dedup tiers exactly as it does today. Nothing is fabricated.
-        if (resolved.reason === 'no-report') { noReport++; return buildRow({ ...app, url: '' }); }
-        if (resolved.reason === 'no-url') { noUrl++; return buildRow({ ...app, url: '' }); }
+        // An unfilled placeholder stays as the user wrote it: `N/A` is a
+        // statement, and erasing it would say less than the row did.
+        if (resolved.reason === 'no-report') { noReport++; return buildRow({ ...app, url: urlCell }); }
+        if (resolved.reason === 'no-url') { noUrl++; return buildRow({ ...app, url: urlCell }); }
         filled++;
         return buildRow({ ...app, url: resolved.url });
       });
