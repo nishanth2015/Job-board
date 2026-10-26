@@ -1384,7 +1384,11 @@ export async function mergeTracker(options = {}) {
         if (!line.startsWith('|')) return line;
         const parts = line.split('|').map(s => s.trim());
         if (parts.length <= companyIdx) return line;
-        const isHeader = parts[colmap.num] === '#';
+        // The header detector every other reader uses, not a literal `#`: a
+        // header whose first column is labelled `Num` (an alias detectColumns
+        // accepts) got `—` instead of `Via`, so the migrated tracker had no Via
+        // column to detect and a second run inserted another one.
+        const isHeader = isHeaderRow(line);
         const isSeparator = /^[-: ]*$/.test(parts.join(''));
         const insert = isHeader ? 'Via' : isSeparator ? '-----' : '—';
         // Only a closing pipe adds a padding cell; otherwise the last part is
