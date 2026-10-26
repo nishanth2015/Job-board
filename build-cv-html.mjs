@@ -146,6 +146,21 @@ function profilePhotoValue() {
   }
 }
 
+// A relative candidate.photo comes from config/profile.yml, a user-layer file,
+// so it is read from the data root, where that file and the user's other files
+// live. It used to resolve against this script's directory, so with the user
+// layer moved out of the checkout (CAREER_OPS_ROOT, CAREER_OPS_DATA_DIR or a
+// .career-ops-data marker) the photo sitting next to the profile was never
+// found and the build failed. The checkout stays as a fallback, so a photo kept
+// there by an install that moved its data root still resolves. Without a data
+// root override the two are the same directory.
+function resolveProfileRelative(photo) {
+  const fromDataRoot = resolve(DATA_ROOT, photo);
+  if (existsSync(fromDataRoot)) return fromDataRoot;
+  const fromCheckout = resolve(__dirname, photo);
+  return existsSync(fromCheckout) ? fromCheckout : fromDataRoot;
+}
+
 async function prepareCandidatePhoto(candidate) {
   const c = candidate && typeof candidate === 'object' ? { ...candidate } : {};
   const photo = typeof c.photo === 'string' ? c.photo.trim() : '';
@@ -181,7 +196,7 @@ async function prepareCandidatePhoto(candidate) {
     throw new Error(`Profile photo path ${photo} does not match candidate.photo in config/profile.yml; a local photo path is read only from the profile`);
   }
 
-  const photoPath = isAbsolute(photo) ? photo : resolve(__dirname, photo);
+  const photoPath = isAbsolute(photo) ? photo : resolveProfileRelative(photo);
   const mime = PHOTO_MIME_BY_EXT.get(extname(photoPath).toLowerCase());
   if (!mime) {
     throw new Error(`Unsupported profile photo format: ${photo} (expected PNG, JPEG, WebP, or GIF)`);

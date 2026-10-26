@@ -297,7 +297,7 @@ The `{{PHOTO}}` slot is **off by default** and intentionally market-specific:
 
 When set, the photo floats into the top corner (mirrored for RTL/Arabic) and the header/summary text wraps beside it; `.cv-photo` in `cv-template.html` controls its size and framing.
 
-Local photo paths may be absolute or relative to the career-ops project root. The builder reads a local path only when the payload's `candidate.photo` equals the value in `config/profile.yml`; any other local path is refused, because the payload is written from an untrusted posting. `data:` and `http(s)` values are unaffected.
+Local photo paths may be absolute or relative to the data root, where the user-layer files live: the career-ops project root, unless `CAREER_OPS_ROOT`, `CAREER_OPS_DATA_DIR` or a `.career-ops-data` marker moves them. A relative path not found there is also tried against the checkout. The builder reads a local path only when the payload's `candidate.photo` equals the value in `config/profile.yml`; any other local path is refused, because the payload is written from an untrusted posting. `data:` and `http(s)` values are unaffected.
 The builder validates PNG, JPEG, WebP, and GIF inputs and inlines them as data
 URLs so the saved HTML remains portable. To inspect the result before PDF
 generation, run:
