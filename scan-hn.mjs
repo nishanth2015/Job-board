@@ -160,7 +160,10 @@ async function main() {
         continue;
       }
       if (!extracted || !extracted.company || !extracted.title) { gate.markSeen(job); continue; }
-      const offer = { ...job, ...extracted, source: 'hn-hiring', postedAt: Date.now() };
+      // The provider's own postedAt (the comment's created_at), never the scan
+      // time: scan-history records it as posted_at, and a guessed date is
+      // worse than an absent one (modes/oferta.md).
+      const offer = { ...job, ...extracted, source: 'hn-hiring', postedAt: job.postedAt };
       // The blacklist and location filter judge what Gemini extracted; the
       // title filter reads the header line the keywords already matched.
       const judged = extracted.location === UNKNOWN_LOCATION ? { ...offer, location: job.location || '' } : offer;
@@ -173,7 +176,7 @@ async function main() {
     console.log(`⚠️ No AI key. Using keyword filtering mode...`);
     for (const job of rawJobs) {
       if (gate.check(job)) continue;
-      newOffers.push({ ...job, source: 'hn-hiring', postedAt: Date.now() });
+      newOffers.push({ ...job, source: 'hn-hiring' });
       console.log(`  ✅ Match: ${job.company}`);
     }
   }
