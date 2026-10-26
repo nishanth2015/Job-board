@@ -1,0 +1,51 @@
+name: 'Template registry validate'
+
+# Runs on PRs that touch the curated template-pack registry. Uses `pull_request`
+# (NOT pull_request_target), read-only permissions, and NO secrets, so a
+# submitter's change can never reach a token or write the repo. This job reads
+# only the registry entries: no pack content is fetched or executed.
+on:
+  pull_request:
+    paths:
+      - 'templates-registry/**'
+
+permissions:
+  contents: read
+
+# Cancel superseded runs when the same PR is pushed again.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate registry entries
+    runs-on: ubuntu-latest
+    steps:
+      # fetch-depth: 0 so the "One pack per PR" diff below has the base
+      # branch's history and merge-base available.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          # The job only reads a public repository. A PR can change the
+          # validator it runs, so it should not hold a token.
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+
+      # Deterministic shape gate (no network).
+      - name: Validate registry shape
+        run: node validate-template-registry.mjs
+
+      - name: One pack per PR
+        # base_ref goes through env, never ${{ }}-spliced into the script:
+        # anything expanded inside run: is literal shell code.
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          git fetch --no-tags origin "$BASE_REF"
+          # --no-renames: a rename would otherwise count as one change and let a
+          # PR swap one pack for another.
+          CHANGED=$(git diff --no-renames --name-only "origin/$BASE_REF"...HEAD -- 'templates-registry/*.json' | wc -l)
+          if [ "$CHANGED" -gt 1 ]; then echo "A registry PR may add or bump exactly one templates-registry/<id>.json file"; exit 1; fi
