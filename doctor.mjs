@@ -32,7 +32,7 @@ const argv = process.argv.slice(2);
 // copy made without `npm install`) died with a raw ERR_MODULE_NOT_FOUND stack
 // from the very check that exists to report missing dependencies. Loading them
 // dynamically lets that failure be caught and reported with the fix.
-let hasYamlContent, loadYaml, dotenv, AGENT_CLIS, validateProfile, EXAMPLE_PATH, resolveExtractorMode;
+let hasYamlContent, loadYaml, dotenv, AGENT_CLIS, validateProfile, EXAMPLE_PATH, resolveExtractorMode, auditUserTemplates;
 try {
   [
     { hasYamlContent, loadYaml },
@@ -40,12 +40,14 @@ try {
     { AGENT_CLIS },
     { validateProfile, EXAMPLE_PATH },
     { resolveExtractorMode },
+    { auditUserTemplates },
   ] = await Promise.all([
     import('./lib/yaml-document.mjs'),
     import('dotenv'),
     import('./lib/agent-cli.mjs'),
     import('./validate-profile.mjs'),
     import('./browser-extract.mjs'),
+    import('./cv-templates.mjs'),
   ]);
 } catch (err) {
   let missing = [];
@@ -1133,6 +1135,29 @@ function checkCvShape(root) {
   };
 }
 
+// The user's own templates under data/templates/ (#5777). Advisory: a template
+// that stopped resolving, or lost a slot every shipped variant keeps, is named
+// here instead of surfacing at render time.
+function checkUserTemplates(root) {
+  let findings;
+  try {
+    findings = auditUserTemplates({ userDir: join(root, 'data', 'templates') });
+  } catch (err) {
+    return { warn: true, label: `data/templates: could not be audited (${err.message})` };
+  }
+  if (findings.length === 0) return null;
+  return {
+    warn: true,
+    label: `data/templates: ${findings.length} template${findings.length === 1 ? '' : 's'} need${findings.length === 1 ? 's' : ''} attention`,
+    fix: findings.flatMap((f) => f.problems.map((p) => {
+      const file = f.path.split(/[\\/]/).pop();
+      return p.type === 'invalid'
+        ? `${file}: ${p.detail}`
+        : `${file}: lacks ${p.missing.map((m) => `{{${m}}}`).join(', ')}, which every shipped ${f.kind === 'cv' ? 'CV' : 'cover-letter'} variant keeps`;
+    })),
+  };
+}
+
 function checkProfileShape(root) {
   const profilePath = profilePathFor(root);
   if (!existsSync(profilePath)) return null;   // the prereq check owns "absent"
@@ -1177,6 +1202,7 @@ async function main() {
     checkProfileShape(projectRoot),
     checkTitleFilterConflicts(projectRoot),
     checkCvShape(projectRoot),
+    checkUserTemplates(projectRoot),
     checkAutoDir('data'),
     checkPipelineFile(),
     checkAutoDir('output'),
@@ -1451,6 +1477,7 @@ function onboardingState(root) {
   const bakCheck = checkTrackedBakFiles(codeRoot);
   const skillCheck = checkSkillEntrypoints(codeRoot);
   const cvShape = checkCvShape(root);
+  const userTemplates = checkUserTemplates(root);
   const envFileProfile = checkEnvFileProfile(root);
   const warnings = [
     ...(cliWarning ? [cliWarning] : []),
@@ -1458,6 +1485,7 @@ function onboardingState(root) {
     ...(bakCheck.warn ? [`${bakCheck.label}\n→ ${[].concat(bakCheck.fix || []).join('\n  ')}`] : []),
     ...(skillCheck.warn ? [`${skillCheck.label}\n→ ${[].concat(skillCheck.fix || []).join('\n  ')}`] : []),
     ...(cvShape?.warn ? [`${cvShape.label}\n→ ${[].concat(cvShape.fix || []).join('\n  ')}`] : []),
+    ...(userTemplates?.warn ? [`${userTemplates.label}\n→ ${[].concat(userTemplates.fix || []).join('\n  ')}`] : []),
     ...(envFileProfile ? [`${envFileProfile.label}\n→ ${envFileProfile.fix.join('\n  ')}`] : []),
     ...unpersonalized.map((u) => `${u.path} ${u.reason} — ${u.impact}\n→ Personalize it from cv.md before running evaluations.`),
   ];

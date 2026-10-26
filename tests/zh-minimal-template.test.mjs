@@ -5,7 +5,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { listTemplates, resolveTemplate, validateTemplate } from '../cv-templates.mjs';
+import { listTemplates, resolveTemplate, validateTemplate, DEFAULT_TEMPLATES_DIR } from '../cv-templates.mjs';
 import { chromium } from 'playwright';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -17,7 +17,7 @@ const CAN_EXTRACT_PDF = HAS_PDFTOTEXT && await chromium.launch({ headless: true 
   .then((browser) => browser.close().then(() => true), () => false);
 
 test('Chinese Minimal template is discoverable and valid', () => {
-  const listed = listTemplates('cv');
+  const listed = listTemplates('cv', { dir: DEFAULT_TEMPLATES_DIR });
   const entry = listed.find((item) => item.name === 'zh-minimal');
   assert.equal(entry?.displayName, 'Chinese Minimal');
   assert.equal(resolveTemplate('cv', 'zh-minimal'), TEMPLATE);

@@ -10,7 +10,7 @@ import { fileURLToPath } from 'url';
 import { loadYaml } from './lib/yaml-document.mjs';
 import { isMainModule } from './lib/is-main-module.mjs';
 import { decodeEntities } from './providers/_html-entities.mjs';
-import { getProfilePath } from './path-resolver.mjs';
+import { getProfilePath, getCareerOpsRoot } from './path-resolver.mjs';
 import {
   parseMeta, PARTIAL_SECTIONS, declaredSections, checkDeclaredSections,
 } from './lib/template-manifest.mjs';
@@ -24,8 +24,15 @@ export { parseMeta, PARTIAL_SECTIONS, declaredSections, checkDeclaredSections };
 const __dirname = dirname(fileURLToPath(import.meta.url));
 // templates/ is System Layer (code root); config/profile.yml is User Layer and
 // follows the data root. CAREER_OPS_PROFILE still wins over both.
-const DEFAULT_TEMPLATES_DIR = resolve(__dirname, 'templates');
+export const DEFAULT_TEMPLATES_DIR = resolve(__dirname, 'templates');
 const DEFAULT_PROFILE_PATH = getProfilePath();
+
+// The user layer: templates the user made or customized live under the data root,
+// where the updater never looks. Read per call, not at load, so the data root a
+// caller sets is the one searched.
+export function DEFAULT_USER_TEMPLATES_DIR() {
+  return resolve(getCareerOpsRoot(), 'data', 'templates');
+}
 
 export const KINDS = {
   cv: {
@@ -75,7 +82,7 @@ function parseFilename(prefix, file) {
 }
 
 // Build the entry a discovered template file contributes.
-function entryFor(parsed, path, pack) {
+function entryFor(parsed, path, pack, layer) {
   const meta = parseMeta(path);
   return {
     name: parsed.name,
@@ -84,6 +91,7 @@ function entryFor(parsed, path, pack) {
     format: parsed.format,
     meta,
     pack,
+    layer,
   };
 }
 
@@ -128,7 +136,7 @@ function entryFor(parsed, path, pack) {
 // collisions.
 //
 // Returns Map<name, entry>. A name claimed twice throws — see assertNoCollision.
-function discover(kind, { dir, format }) {
+function discoverIn(kind, { dir, format }, layer) {
   const cfg = KINDS[kind];
   const found = new Map();
   if (!existsSync(dir)) return found;
@@ -137,7 +145,7 @@ function discover(kind, { dir, format }) {
     if (parsed.format !== format) return;
     const prior = found.get(parsed.name);
     if (prior) assertNoCollision(parsed.name, prior.path, path, dir);
-    found.set(parsed.name, entryFor(parsed, path, pack));
+    found.set(parsed.name, entryFor(parsed, path, pack, layer));
   };
 
   // One listing serves both passes. Reading twice would let the flat pass and
@@ -180,6 +188,18 @@ function discover(kind, { dir, format }) {
   return found;
 }
 
+// System templates plus the user's own. A name in both layers resolves to the
+// user's file: that is the point of a user layer (a customized copy of a shipped
+// name), and the two layers are separate directories, so unlike a clash inside
+// one directory there is no ambiguity about which the user meant. A name claimed
+// twice inside a single layer still throws.
+function discover(kind, { dir, format, userDir = null }) {
+  const found = discoverIn(kind, { dir, format }, 'system');
+  if (!userDir || resolve(userDir) === resolve(dir)) return found;
+  for (const [name, entry] of discoverIn(kind, { dir: userDir, format }, 'user')) found.set(name, entry);
+  return found;
+}
+
 // A template name resolves to exactly one file, enforced when it is discovered
 // rather than settled by a precedence rule.
 //
@@ -197,11 +217,20 @@ function assertNoCollision(name, a, b, dir) {
   );
 }
 
-export function listTemplates(kind, { dir = DEFAULT_TEMPLATES_DIR, format = 'html' } = {}) {
+// The user layer is searched when `dir` is left at its default, or when `userDir`
+// is named. Naming only `dir` keeps that directory the whole registry, so a
+// caller pointing at a fixture is not mixed with whatever the data root holds.
+function userDirFor(dir, userDir) {
+  if (userDir !== undefined) return userDir;
+  return dir === undefined ? DEFAULT_USER_TEMPLATES_DIR() : null;
+}
+
+export function listTemplates(kind, { dir, format = 'html', userDir } = {}) {
   const cfg = KINDS[kind];
   if (!cfg) throw new Error(`Unknown template kind: ${kind}`);
   assertFormat(format);
-  return [...discover(kind, { dir, format }).values()].sort((a, b) => a.name.localeCompare(b.name));
+  const user = userDirFor(dir, userDir);
+  return [...discover(kind, { dir: dir ?? DEFAULT_TEMPLATES_DIR, format, userDir: user }).values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
 export function validateTemplate(path, kind) {
@@ -584,6 +613,64 @@ export function atsLint(path, kind, opts = {}) {
   return result;
 }
 
+// ---- User template audit (#5777) ----
+
+const PLACEHOLDER_RE = /\{\{[A-Z_]+\}\}/g;
+
+function placeholdersOf(path) {
+  return new Set((readFileSync(path, 'utf-8').match(PLACEHOLDER_RE) || []).map((t) => t.slice(2, -2)));
+}
+
+// The slots the shipped templates of one kind all keep: those in the base template
+// that every shipped named variant also carries. A slot a shipped variant drops
+// (INTERESTS, say) is optional by the project's own example, so a user copy
+// dropping it is not drift. With no shipped variant there is nothing to tell
+// optional from core, so nothing is judged (null) rather than every slot flagged.
+function coreSlots(system) {
+  const base = system.get('standard');
+  const variants = [...system.values()].filter((e) => e.name !== 'standard');
+  if (!base || variants.length === 0) return null;
+  let core = placeholdersOf(base.path);
+  for (const v of variants) {
+    const have = placeholdersOf(v.path);
+    core = new Set([...core].filter((slot) => have.has(slot)));
+  }
+  return core;
+}
+
+/**
+ * Advisory audit of the user's own templates (those under data/templates/).
+ * Returns one finding per template that has a problem, and [] when all is well:
+ *   - invalid: it does not resolve (missing required placeholders, or a declared
+ *     section with no partial). The message is the resolver's own.
+ *   - drifted: it lacks a slot every shipped variant of its kind keeps.
+ * Never throws for a template problem and never blocks a render; callers decide
+ * how loudly to report.
+ */
+export function auditUserTemplates({ dir = DEFAULT_TEMPLATES_DIR, userDir = DEFAULT_USER_TEMPLATES_DIR(), format = 'html' } = {}) {
+  assertFormat(format);
+  const findings = [];
+  for (const kind of Object.keys(KINDS)) {
+    const system = discoverIn(kind, { dir, format }, 'system');
+    const core = coreSlots(system);
+    for (const entry of discoverIn(kind, { dir: userDir, format }, 'user').values()) {
+      const problems = [];
+      try {
+        resolveTemplate(kind, entry.name, { dir, userDir, format });
+      } catch (err) {
+        problems.push({ type: 'invalid', detail: err.message });
+      }
+      if (core) {
+        const have = placeholdersOf(entry.path);
+        const missing = [...core].filter((slot) => !have.has(slot)).sort();
+        if (missing.length) problems.push({ type: 'drifted', missing });
+      }
+      if (problems.length) findings.push({ kind, name: entry.name, path: entry.path, problems });
+    }
+  }
+  return findings;
+}
+
 export function loadProfileDefault(kind, { profilePath = DEFAULT_PROFILE_PATH, strict = false } = {}) {
   const cfg = KINDS[kind];
   if (!cfg) throw new Error(`Unknown template kind: ${kind}`);
@@ -609,7 +696,8 @@ export function resolveTemplate(kind, name, opts = {}) {
   const cfg = KINDS[kind];
   if (!cfg) throw new Error(`Unknown template kind: ${kind}`);
   const {
-    dir = DEFAULT_TEMPLATES_DIR,
+    dir,
+    userDir,
     format = 'html',
     profilePath = DEFAULT_PROFILE_PATH,
     fallback = false,
@@ -625,7 +713,7 @@ export function resolveTemplate(kind, name, opts = {}) {
   // would find flat templates only: a pack would list fine and then throw here,
   // which is the failure mode that passes review because the demo path works.
   // Every by-name caller lands here — build-cv-latex.mjs, generate-cover-letter.mjs.
-  const found = discover(kind, { dir, format });
+  const found = discover(kind, { dir: dir ?? DEFAULT_TEMPLATES_DIR, format, userDir: userDirFor(dir, userDir) });
 
   let entry = found.get(chosen);
   if (!entry && fallback && chosen !== 'standard') {
