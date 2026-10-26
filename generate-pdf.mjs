@@ -1622,7 +1622,7 @@ async function runFactGate(html, label) {
   // module is genuinely missing in a real workspace this throws and the render
   // fails, which is the correct direction to fail for a fact gate.
   const { assertFacts, printFactWarnings } = await import('./verify-cv-facts.mjs');
-  const factCheck = assertFacts(html, { label });
+  const factCheck = assertFacts(html, { label, ...factGateInputs() });
   // Ahead of the verdict, because it qualifies it: with no config the phrase
   // lists are empty, so a "passed" below covers metrics and facts only.
   if (factCheck.configMissing) {
@@ -1634,6 +1634,37 @@ async function runFactGate(html, label) {
   } else {
     console.log(`✅ Fact check passed: ${label}`);
   }
+}
+
+/**
+ * The files the fact gate checks a CV against, from the same workspace this
+ * render reads cv.md and the profile from.
+ *
+ * verify-cv-facts defaults to the DATA root's cv.md, article-digest.md and
+ * config/cv-facts.json. This module reads cv.md (the probe that decides
+ * whether the gate runs, and the section-order and locked-section guards) and
+ * config/profile.yml from workspaceRoot, which is a different directory
+ * whenever CAREER_OPS_TRACKER points outside the data root (#2471, #3169). With
+ * the defaults one render read two cv.md files: the guards and the run-or-skip
+ * decision used the workspace's, the fact check the data root's, so a number
+ * absent from the CV this render validated could still pass.
+ *
+ * @returns {{sourcePaths: string[], configPath: string}}
+ */
+function factGateInputs() {
+  return {
+    sourcePaths: [resolve(workspaceRoot, 'cv.md'), resolve(workspaceRoot, 'article-digest.md')],
+    configPath: resolve(workspaceRoot, 'config', 'cv-facts.json'),
+  };
+}
+
+/**
+ * Say that the fact gate did not run, rather than letting a render with no
+ * "Fact check" line read like one that passed. `--skip-fact-check` is the
+ * explicit opt-out and stays quiet.
+ */
+function warnFactGateNotRun() {
+  console.warn(`⚠️  Fact check did not run: no cv.md at ${resolve(workspaceRoot, 'cv.md')} — this CV was not checked against your sources.`);
 }
 
 /**
@@ -1872,7 +1903,10 @@ async function generatePDF() {
   }
 
   // Fact gate, on the normalized HTML: the document that actually prints.
-  if (!skipFactCheck && cvMarkdown) await runFactGate(html, basename(inputPath));
+  if (!skipFactCheck) {
+    if (cvMarkdown) await runFactGate(html, basename(inputPath));
+    else warnFactGateNotRun();
+  }
 
   return renderHtmlToPdf(html, outputPath, {
     format,
@@ -1953,6 +1987,8 @@ async function runBatchFromManifest(manifestPath, globals) {
   } catch (err) {
     if (err?.code !== 'ENOENT') throw err;
   }
+  // Once for the batch, not once per entry.
+  if (!globals.skipFactCheck && !cvMarkdown) warnFactGateNotRun();
   // Read one workspace profile for the batch. The working directory must not
   // choose a different theme from the single-document render.
   const profilePath = workspaceProfilePath();
