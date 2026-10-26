@@ -3553,6 +3553,19 @@ if (shared.includes('_profile.md')) {
     fail(`these modes delegate wording to _writing.md but never read it: ${missingRead.join(', ')} (#2006)`);
   }
 
+  // Reading _writing.md loads a conditional ("no cached style: scan the
+  // samples, write back") that no step owns unless the mode says so. Assert
+  // that each consumer carries the trigger, not just the read.
+  const missingTrigger = WRITING_CONSUMERS.filter((path) => {
+    const src = readFile(path);
+    return !(/## Writing Style/.test(src) && /writing-samples\//.test(src) && /calibration/i.test(src));
+  });
+  if (missingTrigger.length === 0) {
+    pass('cover.md and email.md trigger Writing Style calibration when samples exist and no cached style');
+  } else {
+    fail(`these modes read _writing.md but never trigger Writing Style calibration: ${missingTrigger.join(', ')}`);
+  }
+
   // The delegation must not have taken the mode-specific contracts with it:
   // those are set locally and _writing.md says nothing about them.
   const coverSrc = readFile('modes/cover.md');
