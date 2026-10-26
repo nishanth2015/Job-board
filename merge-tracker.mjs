@@ -1207,7 +1207,12 @@ export async function mergeTracker(options = {}) {
     // width check then read the row as one cell short of its own header.
     const rawLines = String(content ?? '').split(/\r?\n/).filter(l => l.trim() !== '');
     content = String(content ?? '').trim();
-    if (!content) return null;
+    if (!content) {
+      // Said like every other refusal: the file is kept for a re-run and named
+      // as kept, so its reason must be on screen too.
+      console.warn(`⚠️  Skipping ${filename}: the file is empty`);
+      return null;
+    }
 
     // Headed additions resolve by name; everything below is the legacy positional
     // path, unchanged — it keeps parsing the trimmed content, byte-for-byte as
@@ -1721,6 +1726,13 @@ export async function mergeTracker(options = {}) {
     // of merged/ so a re-run picks them up, and they make the process exit non-zero
     // instead of reporting a success that did not happen.
     const failedAdditions = [];
+    // TSVs refused before they reached the dedup: by the parser (a header that
+    // labels a column twice, a blank required cell, a possible column swap) or
+    // by the batch-state guard. Each refusal's warning asks the user to fix
+    // the file and re-run, so the file has to stay where a re-run looks.
+    // They still count as skipped and do not fail the run, as before; they are
+    // only no longer archived into merged/, where a re-run never looks.
+    const refusedAdditions = [];
 
     /**
      * Replace one tracker row line wherever it currently lives.
@@ -1753,7 +1765,7 @@ export async function mergeTracker(options = {}) {
       // parseTsvContent needs to see it. It trims internally for the legacy path.
       const content = readFileSync(join(ADDITIONS_DIR, file), 'utf-8');
       const addition = parseTsvContent(content, file);
-      if (!addition) { skipped++; continue; }
+      if (!addition) { skipped++; refusedAdditions.push(file); continue; }
 
       // A via= tag can only be stored if the tracker has a Via column — warn
       // instead of dropping the channel silently (#1596). Clear the value too:
@@ -1797,6 +1809,7 @@ export async function mergeTracker(options = {}) {
           console.warn(`   batch-state.tsv also has a "completed" row for #${reportNum}: the number was likely reused after a failure by an older batch runner. If this report is the completed offer's, set report_num to "-" on the failed row and re-run.`);
         }
         skipped++;
+        refusedAdditions.push(file);
         continue;
       }
 
@@ -2310,7 +2323,7 @@ export async function mergeTracker(options = {}) {
       // into permanent data loss, since applications.md is gitignored and no backup
       // is written.
       if (!existsSync(MERGED_DIR)) mkdirSync(MERGED_DIR, { recursive: true });
-      const archivable = tsvFiles.filter(f => !failedAdditions.includes(f));
+      const archivable = tsvFiles.filter(f => !failedAdditions.includes(f) && !refusedAdditions.includes(f));
       for (const file of archivable) {
         renameSync(join(ADDITIONS_DIR, file), join(MERGED_DIR, file));
       }
@@ -2319,6 +2332,12 @@ export async function mergeTracker(options = {}) {
 
     console.log(`\n📊 Summary: +${added} added, 🔄${updated} updated, ⏭️${skipped} skipped${failedAdditions.length ? `, ❌${failedAdditions.length} NOT merged` : ''}`);
     if (missingReports > 0) console.log(`⚠️  ${missingReports} row(s) link to a report that is not on disk (see warnings above)`);
+    if (refusedAdditions.length > 0 && !DRY_RUN) {
+      console.warn(
+        `⚠️  ${refusedAdditions.length} skipped addition(s) left in ${ADDITIONS_DIR} for a re-run: ` +
+        `${refusedAdditions.join(', ')} — fix each as its warning above says (or delete it), then run merge-tracker again`,
+      );
+    }
     if (DRY_RUN) console.log('(dry-run — no changes written)');
     trackerLock.release();
 
