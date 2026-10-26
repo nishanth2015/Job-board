@@ -12,7 +12,9 @@
  * process and never touch the real allocator or tracker.
  */
 import path from "node:path";
+import fs from "node:fs";
 import { slugify } from "./pdf-paths.mjs";
+import { setInboxSkip } from "./inbox-skip.mjs";
 
 const ISO_DATE_RE = /^20\d{2}-\d{2}-\d{2}$/;
 const YAML_FENCE = /##\s*Machine Summary\s*\n+```(?:yaml|yml)?\s*\n([\s\S]*?)\n```/i;
@@ -283,5 +285,22 @@ export async function persistEvaluation({ spawnFn, execPath, root, markdown, url
   if (held) return held;
   const warnings = [];
   if (merged.stderr) warnings.push(merged.stderr);
+  // Complete the discovery only after the report and tracker row were saved.
+  // A direct URL evaluation may have no inbox entry. Failure here must not
+  // turn a saved evaluation into a failed one; readInbox also reconciles
+  // against the tracker, so an old checkbox cannot resurrect the posting.
+  const pipelinePath = path.join(root, "data", "pipeline.md");
+  if (postingUrl && fs.existsSync(pipelinePath)) {
+    try {
+      const completed = await setInboxSkip(pipelinePath, postingUrl, true, {
+        lockModule: path.join(root, "pipeline-lock.mjs"),
+      });
+      if (!completed.ok && !["unmatched", "not-found"].includes(completed.error)) {
+        warnings.push("Evaluation saved, but the inbox checkbox could not be updated.");
+      }
+    } catch {
+      warnings.push("Evaluation saved, but the inbox checkbox could not be updated.");
+    }
+  }
   return { ok: true, num, reportFile, warnings };
 }
