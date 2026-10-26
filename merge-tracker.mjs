@@ -23,19 +23,19 @@
  *   --backfill-urls  fill empty URL cells from each row's linked report
  */
 
-import { readFileSync, readdirSync, mkdirSync, renameSync, existsSync, statSync } from 'fs';
-import { join, basename, dirname, resolve, sep } from 'path';
+import { readFileSync, readdirSync, mkdirSync, renameSync, existsSync } from 'fs';
+import { join, basename, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { execFileSync } from 'child_process';
 import { normalizeReportLink as normalizeLink } from './tracker-links.mjs';
 import { getCareerOpsRoot } from './path-resolver.mjs';
 import { roleFuzzyMatch } from './role-matcher.mjs';
 import { parsePdfIndex, livePdfIndex, normNum } from './find.mjs';
-import { LEGACY_COLMAP, TSV_REQUIRED_FIELDS, detectColumns, isHeaderRow, resolveScoreStatus, looksLikeTsvHeaderRow, resolveTsvColumns, looksLikeScoreCell, parseScore, normalizeVia, normalizeTextKey, SEPARATOR_ROW_RE, extractReqNumber, extractCellUrl, parseMarkdownLinks, firstLinkTarget, unwrapReportUrlToken } from './tracker-parse.mjs';
+import { LEGACY_COLMAP, TSV_REQUIRED_FIELDS, detectColumns, isHeaderRow, resolveScoreStatus, looksLikeTsvHeaderRow, resolveTsvColumns, looksLikeScoreCell, parseScore, normalizeVia, normalizeTextKey, SEPARATOR_ROW_RE, extractReqNumber, extractCellUrl, parseMarkdownLinks } from './tracker-parse.mjs';
 // The ATS vendor table shared with analyze-patterns.mjs and the scanners, so
 // the URL cell's label and the per-vendor analysis name a board identically.
 import { atsVendorOf } from './ats-vendor.mjs';
-import { resolveTrackerPath, resolveWorkspaceRoot, resolvePdfIndexPath, trackerLockDirFor, acquireTrackerLock, writeFileAtomic, normalizeCompany, companiesMatchIgnoringCorporateForm, cell, loadCanonicalStates, findDeadReportLink, rebuildRow, trackerLinkDirsFor } from './tracker-utils.mjs';
+import { resolveTrackerPath, resolveWorkspaceRoot, resolvePdfIndexPath, trackerLockDirFor, acquireTrackerLock, writeFileAtomic, normalizeCompany, companiesMatchIgnoringCorporateForm, cell, loadCanonicalStates, findDeadReportLink, rebuildRow, trackerLinkDirsFor, containedReportTarget, containedReportFile, reportUrlToken } from './tracker-utils.mjs';
 // Canonical posting-URL key and URL comparison, shared with the other tracker
 // scripts and scan.mjs so the definitions cannot drift apart.
 import { normalizeUrl, isAggregatorUrl, aggregatorPostingId, postingUrlRelation } from './url-key.mjs';
@@ -487,13 +487,9 @@ export async function mergeTracker(options = {}) {
    * @returns {string|null}
    */
   function resolveReportTarget(reportField) {
-    const linkTarget = firstLinkTarget(reportField);
-    if (linkTarget == null) return null;
-    // Containment, not cosmetics: resolve and assert the path stays under
-    // REPORTS_ROOT. Stripping leading `../` alone still let an embedded
-    // `reports/../../..` walk out of the tree, and the tracker is user-editable.
-    const reportPath = resolve(REPORTS_ROOT, linkTarget.trim().replace(/^(\.\.\/)+/, ''));
-    return reportPath.startsWith(REPORTS_ROOT + sep) ? reportPath : null;
+    // Containment lives in tracker-utils so dedup-tracker.mjs applies the same
+    // rule when it reads reports — see containedReportTarget().
+    return containedReportTarget(reportField, REPORTS_ROOT);
   }
 
   /**
@@ -507,40 +503,19 @@ export async function mergeTracker(options = {}) {
    * @returns {string|null} The resolved absolute path, or null.
    */
   function resolveReportPath(reportField) {
-    const reportPath = resolveReportTarget(reportField);
-    if (!reportPath) return null;
-    // existsSync alone accepts a directory, which would let the new Pass 0.5
-    // dedup tier treat two additions whose report link happens to resolve to
-    // the same directory as report-identical without ever reading a file.
-    if (!existsSync(reportPath) || !statSync(reportPath).isFile()) return null;
-    return reportPath;
+    return containedReportFile(reportField, REPORTS_ROOT);
   }
 
   function resolveReportUrl(reportField) {
     const reportPath = resolveReportPath(reportField);
     if (!reportPath) return { url: '', reason: 'no-report' };
-    // [ \t]* NOT \s*: \s matches newlines, so an empty `**URL:**` header swallowed
-    // the line break and captured the NEXT header's text. Every such report then
-    // minted the same bogus key (`**Legitimacy:**`), and the backfill counted it
-    // as a successful fill. `\S+` cannot cross a newline, so an empty header now
-    // just fails to match at that position instead of reaching into the next line.
-    //
-    // Deliberately NOT anchored to line start. AGENTS.md requires `**URL:**` "in
-    // the header (between Score and PDF)" — that is, INLINE:
-    //   **Score:** 4.1/5 | **URL:** https://… | **Legitimacy:** High | **PDF:** …
-    // which a `^`-anchored pattern cannot see. Every report written in the
-    // documented format reported "no **URL:** header" and silently fell back to
-    // fuzzy company+role dedup — the exact matching that let a new Google req
-    // overwrite a different, concurrently-live one. Checked against all 399
-    // reports: 376 match both ways and agree on the URL 376/376, so dropping the
-    // anchor cannot change a URL that already resolved.
-    const m = readFileSync(reportPath, 'utf-8').match(/\*\*URL:\*\*[ \t]*(\S+)/);
-    if (!m) return { url: '', reason: 'no-url' };
-    // Strip a markdown autolink wrapper and trailing punctuation, then require a
-    // real http(s) URL. `**URL:** N/A` is legitimate for recruiter-sourced roles,
-    // and normalizeUrl deliberately yields no key for it — writing the placeholder
-    // into the column would hand every such row the same key.
-    const raw = unwrapReportUrlToken(m[1]);
+    // The `**URL:**` reader is shared with dedup-tracker.mjs, which needs the
+    // same fallback for rows with no URL cell — see reportUrlToken(). Then
+    // require a real http(s) URL. `**URL:** N/A` is legitimate for
+    // recruiter-sourced roles, and normalizeUrl deliberately yields no key for
+    // it — writing the placeholder into the column would hand every such row
+    // the same key.
+    const raw = reportUrlToken(reportPath);
     return normalizeUrl(raw) ? { url: raw, reason: 'ok' } : { url: '', reason: 'no-url' };
   }
 
