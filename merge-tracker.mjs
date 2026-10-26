@@ -1550,7 +1550,16 @@ export async function mergeTracker(options = {}) {
     // two can never disagree.
     HEADER_WIDTH = (() => {
       for (const line of appLines) {
-        if (line.startsWith('|') && isHeaderRow(line)) return line.split('|').length;
+        if (!line.startsWith('|') || !isHeaderRow(line)) continue;
+        // Counted as if the header closed with a pipe, the shape buildRow
+        // writes. A header without one (`| # | … | Notes`) is still a Markdown
+        // table header, and parseTrackerRow reads rows of that shape already
+        // (`endsWith('|') ? 2 : 1`). Counted raw it came out one short, so
+        // buildRow allocated one cell too few and put('notes'), the last
+        // column, failed silently on every row it built: a new row lost its
+        // notes and an updated row lost the notes it had.
+        const width = line.split('|').length;
+        return line.trimEnd().endsWith('|') ? width : width + 1;
       }
       return null;
     })();
