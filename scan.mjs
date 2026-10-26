@@ -1572,8 +1572,18 @@ export function shouldDedupScanHistoryRow({ firstSeen, status = 'added' }, { rec
   return ageDays < recheckAfterDays;
 }
 
-function scanHistoryPolicy(config = {}) {
-  const raw = config.scan_history?.recheck_after_days;
+/**
+ * The `scan_history` recheck policy portals.yml sets, in the shape
+ * collectSeenUrls and loadSeenUrls take. Exported so every scanner that builds
+ * a seen set releases the rows scan.mjs releases: a policy left out reads as
+ * "dedup forever", so a scanner that skipped it kept a URL seen after
+ * scan.mjs had let it back in.
+ *
+ * @param {object|null} [config] - Parsed portals.yml.
+ * @returns {{recheckAfterDays: number|null}}
+ */
+export function scanHistoryPolicy(config = {}) {
+  const raw = config?.scan_history?.recheck_after_days;
   const parsed = Number.parseInt(raw, 10);
   return {
     recheckAfterDays: Number.isFinite(parsed) && parsed >= 0 ? parsed : null,
