@@ -14,7 +14,15 @@ export const DESCRIPTION_CAP = 4000;
 // so the common `<[^>]+>` shortcut can stop midway through a tag and expose
 // the remaining attributes as description text. Requiring content between the
 // brackets preserves a literal `<>`, as the old matcher did.
-const HTML_TAG_RE = /<(?:[^>"']|"[^"]*"|'[^']*')+>/g;
+//
+// A tag also has to START like one: `<` followed by a letter, `/`, `!` or `?`,
+// the only openers an HTML tokenizer reads as markup. Without that, every
+// strip after a decode read prose as a tag: a JD saying `teams of &lt;10
+// engineers` decoded to `<10 engineers`, and everything from there to the
+// next `>` (a `&gt;150k` paragraphs later) was deleted, sponsorship sentence
+// included. `<script`, `</p`, `<!--` still match, so double-encoded active
+// markup stays inert.
+const HTML_TAG_RE = /<(?=[a-z/!?])(?:[^>"']|"[^"]*"|'[^']*')+>/gi;
 const HTML_MEDIA_RE = /<(script|style)\b(?:[^>"']|"[^"]*"|'[^']*')*>[\s\S]*?<\/\1\s*>/gi;
 
 /** @param {string} content */
