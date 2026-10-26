@@ -481,7 +481,7 @@ test('the CLI refuses a non-HTML template rather than reporting it clean', () =>
   assert.equal(tex.stdout.trim(), '', 'nothing that looks like a clean result may be printed');
 
   const html = cli(['lint', 'cv']);
-  assert.equal(html.status, 0, `the html path must still work: ${html.stderr}`);
+  assert.equal(html.status, 0, describeSpawn(html, `the html path must still work`));
   assert.equal(JSON.parse(html.stdout).ok, true);
 });
 
@@ -495,7 +495,7 @@ test('the CLI test helper does not inherit CAREER_OPS_PROFILE', () => {
   process.env.CAREER_OPS_PROFILE = profile;
   try {
     const html = cli(['lint', 'cv']);
-    assert.equal(html.status, 0, `an ambient CAREER_OPS_PROFILE must not reach the child: ${html.stderr}`);
+    assert.equal(html.status, 0, describeSpawn(html, `an ambient CAREER_OPS_PROFILE must not reach the child`));
     assert.equal(JSON.parse(html.stdout).ok, true);
   } finally {
     if (prior === undefined) delete process.env.CAREER_OPS_PROFILE;
@@ -571,10 +571,10 @@ test('the CLI honours --fallback on lint, the same as on resolve', () => {
   assert.notEqual(cli(['lint', 'cv', missing]).status, 0, 'lint without --fallback must refuse');
 
   const resolved = cli(['resolve', 'cv', missing, '--fallback']);
-  assert.equal(resolved.status, 0, `resolve --fallback must answer: ${resolved.stderr}`);
+  assert.equal(resolved.status, 0, describeSpawn(resolved, `resolve --fallback must answer`));
   assert.match(resolved.stdout.trim(), /cv-template\.html$/, 'it falls back to the standard template');
 
   const linted = cli(['lint', 'cv', missing, '--fallback']);
-  assert.equal(linted.status, 0, `lint --fallback must answer too: ${linted.stderr}`);
+  assert.equal(linted.status, 0, describeSpawn(linted, `lint --fallback must answer too`));
   assert.equal(JSON.parse(linted.stdout).ok, true);
 });
