@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import { fetchText, fetchResponse } from '../../providers/_http.mjs';
+import { describeSpawn } from '../helpers/describe-spawn.mjs';
 
 async function listening(server) {
   server.listen(0, '127.0.0.1');
@@ -133,7 +134,7 @@ test('direct requests work without undici; opting in explains how to install it'
     await assert.rejects(fetchText('http://public.example/'), /run npm install/);
   `;
   const result = spawnSync(process.execPath, ['--experimental-loader', loader, '--input-type=module', '-e', script], { encoding: 'utf8' });
-  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.status, 0, describeSpawn(result));
 });
 
 test('credential-bearing HTTP proxies are rejected without exposing their credentials', async () => {

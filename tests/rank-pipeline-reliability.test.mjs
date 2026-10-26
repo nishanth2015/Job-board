@@ -14,6 +14,7 @@ import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { ROOT } from './helpers.mjs';
 import { CLI_CANDIDATES, buildPrompt, resolveRankTimeoutMs } from '../rank-pipeline.mjs';
+import { describeSpawn } from './helpers/describe-spawn.mjs';
 
 const POSIX = { skip: process.platform === 'win32' && 'POSIX executable fixture' };
 const ROWS = Array.from({ length: 12 }, (_, i) => `- [ ] https://example.test/${i} | Example | Engineer ${i}`);
@@ -67,7 +68,7 @@ test('each CLI is asked for one answer with no tools or extra turns', () => {
 test('opencode runs with every permission denied', POSIX, (t) => {
   const root = sandbox(t, `fs.writeFileSync(process.env.RANK_ENV, process.env.OPENCODE_CONFIG_CONTENT ?? '');\n${SCORE_ALL}`, 'opencode');
   const result = rank(root, ['--dry-run'], { RANK_ENV: join(root, 'env.txt'), OPENCODE_CONFIG_CONTENT: '' }, 'opencode');
-  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.status, 0, describeSpawn(result));
   assert.deepEqual(JSON.parse(readFileSync(join(root, 'env.txt'), 'utf8')), { permission: 'deny' });
 });
 
@@ -80,7 +81,7 @@ test('the prompt asks for a score from the listed text, not from fetching the po
 test('the CLI runs in an empty temp directory, not the data root, and the directory is removed', POSIX, (t) => {
   const root = sandbox(t, `fs.writeFileSync(process.env.RANK_CWD, JSON.stringify({ cwd: process.cwd(), files: fs.readdirSync('.') }));\n${SCORE_ALL}`);
   const result = rank(root, ['--dry-run'], { RANK_CWD: join(root, 'cwd.json') });
-  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.status, 0, describeSpawn(result));
   const seen = JSON.parse(readFileSync(join(root, 'cwd.json'), 'utf8'));
   assert.notEqual(seen.cwd, root);
   assert.ok(!seen.cwd.startsWith(ROOT), seen.cwd);
@@ -132,7 +133,7 @@ test('rows the model skipped are named, not left silently unranked', POSIX, (t) 
 const ids = n === 10 ? [0, 1, 2] : [0];
 console.log(JSON.stringify(ids.map(id => ({ id, score: 4, reason: 'Fixture match' }))));`);
   const result = rank(root, ['--dry-run']);
-  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.status, 0, describeSpawn(result));
   assert.match(result.stdout, /would annotate 4 of 12/);
   assert.match(result.stderr, /8 of 12 selected entr\(ies\) left unranked/);
   assert.match(result.stderr, /https:\/\/example\.test\/3 \(batch 1: no score returned\)/);
