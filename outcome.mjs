@@ -30,6 +30,7 @@ import { parseTrackerRow, resolveColumns, extractTrackerReportNumbers } from './
 import { OUTCOME_MAP } from './lib/outcome-types.mjs';
 import { roleFuzzyMatch } from './role-matcher.mjs';
 import {
+  companiesMatchIgnoringCorporateForm,
   normalizeCompany,
   pathIsInsideCanonical,
   resolvePdfIndexPath,
@@ -191,12 +192,32 @@ if (/^\d+$/.test(selector)) {
   }
 } else {
   const key = normalizeCompany(selector);
+  // The rule set-status.mjs applies, and this script hands it the write. An
+  // empty key (`?`, or a name in a script normalizeCompany folds away) names
+  // no company; it matched every row whose own key is empty.
+  if (!key) {
+    failExit(`Selector "${selector}" is empty after normalization — pass the tracker row # instead`, 'empty-selector', EXIT_USAGE);
+  }
   candidates = rows.filter(r => normalizeCompany(r.company) === key);
   if (candidates.length === 0) {
-    candidates = rows.filter(r => normalizeCompany(r.company).includes(key) || key.includes(normalizeCompany(r.company)));
+    // The same employer under another corporate form ("Acme" for "Acme
+    // Corp"), by the rule dedup-tracker and merge-tracker use. This was a raw
+    // substring test: `key.includes('')` is true for every blind-employer `?`
+    // row, so an outcome for a company never tracked was recorded on one of
+    // them, and "Meta" selected "Metabase". set-status cannot catch either,
+    // since it receives this row's own number and role.
+    candidates = rows.filter(r => companiesMatchIgnoringCorporateForm(selector, r.company));
   }
   if (candidates.length === 0) {
-    failExit(`No tracker row for company matching "${selector}"`, 'company-not-found', EXIT_NOT_FOUND);
+    // A near miss is offered, never selected.
+    const near = rows.filter(r => {
+      const rowKey = normalizeCompany(r.company);
+      return rowKey && (rowKey.includes(key) || key.includes(rowKey));
+    }).slice(0, 3);
+    const hint = near.length
+      ? ` — did you mean ${near.map(r => `#${r.num} ${r.company}`).join(' or ')}? Pass the row # to select it`
+      : '';
+    failExit(`No tracker row for company matching "${selector}"${hint}`, 'company-not-found', EXIT_NOT_FOUND);
   }
 }
 
