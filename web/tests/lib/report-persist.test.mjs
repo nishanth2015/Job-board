@@ -287,6 +287,9 @@ test("persistEvaluation: writes report + TSV, reserves, merges, releases", async
     assert.equal(payload.reportFile, "035-acme-ai-2026-08-04.md");
     assert.equal(payload.url, "https://acme.com/jobs/7");
     assert.ok(calls.every((c) => c.opts.cwd === root));
+    // No core script inherits the server's console: a stale one kills the
+    // child at DLL init on Windows with no output at all (#3809).
+    assert.ok(calls.every((c) => c.opts.windowsHide === true), "every persist step launches with windowsHide");
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
