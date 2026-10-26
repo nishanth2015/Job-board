@@ -74,7 +74,7 @@ import { buildTitleFilter, buildTitleFilterOverrides, buildTitleFilterWithOverri
 import { localToday } from './lib/local-today.mjs';
 import { printScanSummaryHeader } from './lib/scan-summary-marker.mjs';
 import { SEED_SOURCES, toPortalEntry } from './seeds/vc-portfolios.mjs';
-import { validateFlags } from './lib/cli-flags.mjs';
+import { validateFlags, flagValue, hasFlag } from './lib/cli-flags.mjs';
 import { isMainModule } from './lib/is-main-module.mjs';
 import { boardKey, loadDeadBoards, recordBoardFailure, recordBoardResult, saveDeadBoards, shouldSkipDeadBoard } from './dead-boards.mjs';
 import { getCareerOpsRoot } from './path-resolver.mjs';
@@ -493,7 +493,20 @@ export function parseArgs(argv) {
     process.exit(1);
   }
   const sinceDays = sinceArg.days ?? 3;
-  const limit = Number(valueOf('--limit')) || Infinity;
+  // The same rule --since follows (#2498): a malformed operand is an error,
+  // never a silent default. `Number(...) || Infinity` turned `--limit abc`,
+  // `--limit 0`, a typo like `--limit 1O`, and a bare `--limit` into an
+  // UNBOUNDED sweep, the slowest and most network-hungry run this script has,
+  // while the user believed they had capped it.
+  let limit = Infinity;
+  if (hasFlag(args, '--limit')) {
+    const raw = String(flagValue(args, '--limit') ?? '').trim();
+    if (!/^[1-9]\d*$/.test(raw)) {
+      console.error(`Error: --limit expects a positive whole number of companies, got ${raw ? `"${raw}"` : 'no value'}`);
+      process.exit(1);
+    }
+    limit = Number(raw);
+  }
   const atsArg = valueOf('--ats');
   // --seeds: optional comma-separated VC portfolio sources (e.g. yc,a16z).
   // When set, the seed companies are fetched and probed via the ATS providers
