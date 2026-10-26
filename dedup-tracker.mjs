@@ -20,6 +20,7 @@ import { postingUrlRelation } from './url-key.mjs';
 import {
   openTrackerTransaction, rebuildRow, normalizeCompany, companiesMatchIgnoringCorporateForm,
   MIN_STEM_CHARS, loadCanonicalStates, resolveCanonicalStateId, resolveCanonicalState,
+  stripStatusDecoration,
 } from './tracker-utils.mjs';
 import { resolveColumns, parseTrackerRow, normalizeVia, extractReqNumber, parseScore } from './tracker-parse.mjs';
 import { validateFlags } from './lib/cli-flags.mjs';
@@ -502,12 +503,20 @@ for (const [company, companyEntries] of groups) {
     if (bestStatus !== keeper.status) {
       const lineIdx = keeper.lineIdx;
       if (lineIdx !== undefined) {
+        // The donor's spelling, without its bold or trailing date. statusRank()
+        // strips both before ranking, so a legacy `Applied 2026-01-02` cell can
+        // win. Copied verbatim it put a date in the keeper's Status cell, and
+        // resolveCanonicalState() then read the promoted status as unknown: the
+        // ledger recorded `to: -`, which funnel-velocity replays as retracting
+        // the row's last real transition, and the Applied/Interview hooks below
+        // never ran.
+        const promoted = stripStatusDecoration(bestStatus);
         const parts = lines[lineIdx].split('|').map(s => s.trim());
-        parts[COLMAP.status] = bestStatus;
+        parts[COLMAP.status] = promoted;
         lines[lineIdx] = rebuildRow(parts);
         const donorNum = cluster.find(e => e.status === bestStatus)?.num;
-        console.log(`  📝 #${keeper.num}: status promoted to "${bestStatus}" (from #${donorNum})`);
-        promotions.push({ keeper, from: keeper.status, to: bestStatus, donorNum });
+        console.log(`  📝 #${keeper.num}: status promoted to "${promoted}" (from #${donorNum})`);
+        promotions.push({ keeper, from: keeper.status, to: promoted, donorNum });
       }
     }
 
@@ -580,7 +589,9 @@ if (!DRY_RUN && removed > 0) {
   // status came from. dedup-tracker did not observe the transition, it found
   // it, so funnel-velocity counts the row but keeps it out of day-math: dated
   // today, it would otherwise read as "applied today".
-  const ledgerState = status => resolveCanonicalState(status, CANONICAL_STATES) ?? '-';
+  // The keeper's own cell can be a dated legacy one too; strip it the same way
+  // so a known prior state is not logged as unknown.
+  const ledgerState = status => resolveCanonicalState(stripStatusDecoration(status), CANONICAL_STATES) ?? '-';
   for (const p of promotions) {
     statusHooks.appendStatusTransition(APPS_FILE, {
       num: p.keeper.num,

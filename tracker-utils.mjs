@@ -882,6 +882,23 @@ export function resolveCanonicalState(input, states) {
 }
 
 /**
+ * A raw Status cell without the decoration legacy trackers carry: markdown
+ * bold and a trailing date (`**Applied**`, `Applied 2026-01-02`). What is left
+ * is the spelling states.yml resolves, a label or an alias, unchanged.
+ *
+ * The read side resolves a cell through this (resolveCanonicalStateId()), so a
+ * writer that copies a cell must strip it the same way. Otherwise it writes a
+ * value its own readers ranked as a known state but that
+ * resolveCanonicalState() reads as unknown.
+ *
+ * @param {*} input - Raw status cell from applications.md.
+ * @returns {string}
+ */
+export function stripStatusDecoration(input) {
+  return String(input ?? '').replace(/\*\*/g, '').replace(/\s+\d{4}-\d{2}-\d{2}.*$/, '').trim();
+}
+
+/**
  * Resolve a raw tracker status CELL to its canonical lowercase state id.
  *
  * The read-side twin of resolveCanonicalState(): scripts that bucket or compare
@@ -897,8 +914,7 @@ export function resolveCanonicalState(input, states) {
  * @returns {string|null} Canonical id (e.g. "interview"), or null when unknown.
  */
 export function resolveCanonicalStateId(input, states) {
-  const cell = String(input ?? '').replace(/\*\*/g, '').replace(/\s+\d{4}-\d{2}-\d{2}.*$/, '');
-  const label = resolveCanonicalState(cell, states);
+  const label = resolveCanonicalState(stripStatusDecoration(input), states);
   if (label === null) return null;
   return states.find(s => s.label === label).id.toLowerCase();
 }
