@@ -42,7 +42,7 @@ import { stripEmptySections } from './cv-sections-core.mjs';
 import { getCareerOpsRoot, getProfilePath } from './path-resolver.mjs';
 import { validateLockedSections, sectionKey } from './generate-pdf.mjs';
 import { readLockedSections } from './theme-style.mjs';
-import { hasRequiredFields, validatePayload } from './lib/cv-payload-schema.mjs';
+import { hasRequiredFields, templateSlotWarnings, validatePayload } from './lib/cv-payload-schema.mjs';
 import { resolveTrackerPath, resolveWorkspaceRoot } from './tracker-utils.mjs';
 import { PAGE_WIDTHS, resolvePageFormat } from './lib/page-format.mjs';
 import { PARTIAL_SECTIONS, declaredSections, parseMeta } from './lib/template-manifest.mjs';
@@ -879,6 +879,22 @@ function mdUrl(url) {
     c => `%${c.charCodeAt(0).toString(16).toUpperCase().padStart(2, '0')}`);
 }
 
+// The {{TOKEN}} that renders each payload section, for templateSlotWarnings.
+// renderHtml fills the content slot; renderMarkdown keeps a section only where
+// the template places its title (templateSectionOrder below), and the consent
+// footer only where the template has one.
+const HTML_SECTION_SLOTS = {
+  summary: 'SUMMARY_TEXT', competencies: 'COMPETENCIES', experience: 'EXPERIENCE',
+  projects: 'PROJECTS', education: 'EDUCATION', certifications: 'CERTIFICATIONS',
+  awards: 'AWARDS', interests: 'INTERESTS', skills: 'SKILLS', consent: 'CONSENT',
+};
+function markdownSectionSlots() {
+  return {
+    ...Object.fromEntries(Object.keys(DEFAULT_SECTION_TITLES).map((key) => [key, `SECTION_${key.toUpperCase()}`])),
+    consent: 'CONSENT',
+  };
+}
+
 // Section keys in the order the template places their {{SECTION_*}} titles.
 function templateSectionOrder(template) {
   return Object.keys(DEFAULT_SECTION_TITLES)
@@ -1007,9 +1023,10 @@ async function runMarkdown(args) {
     console.error(JSON.stringify({ valid: false, errors, warnings }, null, 2));
     process.exit(1);
   }
+  const template = await readFile(templatePath, 'utf-8');
+  warnings.push(...templateSlotWarnings(payload, template, markdownSectionSlots(), basename(templatePath)));
   for (const message of warnings) console.error(`Warning: ${message}`);
   await mkdir(dirname(absOutput), { recursive: true });
-  const template = await readFile(templatePath, 'utf-8');
   await writeFile(absOutput, renderMarkdown(payload, template), 'utf-8');
   console.log(JSON.stringify({ file: basename(absOutput), path: absOutput, format: 'markdown', warnings, valid: true }, null, 2));
   process.exit(0);
@@ -1089,9 +1106,10 @@ async function main() {
     console.error(JSON.stringify({ valid: false, errors, warnings }, null, 2));
     process.exit(1);
   }
-  for (const message of warnings) console.error(`Warning: ${message}`);
 
   const template = await readFile(templatePath, 'utf-8');
+  warnings.push(...templateSlotWarnings(payload, template, HTML_SECTION_SLOTS, basename(templatePath)));
+  for (const message of warnings) console.error(`Warning: ${message}`);
 
   let html;
   try {
