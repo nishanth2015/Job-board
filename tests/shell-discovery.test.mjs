@@ -23,14 +23,15 @@ test('resolution is memoized and the source stays consistent with it', () => {
   assert.equal(bashSource(), source);
 });
 
-test('a literal-path bash is reported as git-bash and actually exists', () => {
+test('a literal-path bash actually exists, and only fallback branches stay bare', () => {
   const bash = getBash();
   if (bash === 'bash') {
-    // Fallback shell — the branch this test is not about.
-    assert.notEqual(bashSource(), 'git-bash');
+    // Fallback shells — the branches this test is not about. The PATH probe
+    // no longer lands here: it resolves to the file the ambient PATH found.
+    assert.ok(['wsl', 'unresolved'].includes(bashSource()), `unexpected source: ${bashSource()}`);
     return;
   }
-  assert.equal(bashSource(), 'git-bash');
+  assert.ok(['git-bash', 'path'].includes(bashSource()), `unexpected source: ${bashSource()}`);
   assert.ok(existsSync(bash), `getBash() returned a path that does not exist: ${bash}`);
 });
 
