@@ -84,6 +84,14 @@ try {
   // come back byte-identical, including its terminating semicolon.
   eq('a rejected entity keeps its exact source text',
     decodeEntities('&#0;&#xD800;&#x110000;&#xFFFF;'), '&#0;&#xD800;&#x110000;&#xFFFF;');
+
+  // bareNumeric: an attribute-value caller (renderLint) sees what the browser
+  // sees. Named references and the default mode keep requiring the semicolon.
+  eq('bareNumeric decodes a decimal reference without a semicolon', decodeEntities('https&#58//x', { bareNumeric: true }), 'https://x');
+  eq('bareNumeric decodes a hex reference without a semicolon', decodeEntities('a&#x3a//x', { bareNumeric: true }), 'a://x');
+  eq('bareNumeric still decodes semicolon-terminated references', decodeEntities('&#106;s &amp;', { bareNumeric: true }), 'js &');
+  eq('bareNumeric leaves a semicolon-free named reference alone', decodeEntities('&amp#58', { bareNumeric: true }), '&amp#58');
+  eq('the default mode leaves a semicolon-free numeric reference alone', decodeEntities('https&#58//x'), 'https&#58//x');
 } catch (e) {
   fail(`_html-entities tests crashed: ${e.message}`);
 }

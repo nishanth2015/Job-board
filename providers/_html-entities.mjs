@@ -111,9 +111,20 @@ function isEmittableCodePoint(code) {
     || (code >= 0x10000 && code <= 0x10ffff);
 }
 
-/** @param {string} s */
-export function decodeEntities(s) {
-  return s.replace(/&(#[xX][0-9a-fA-F]+|#[0-9]+|[a-zA-Z]+);/g, (m, body) => {
+// An HTML parser decodes a numeric reference in an attribute value even when
+// its semicolon is missing (`&#58//x` is `://x`), so a caller that inspects an
+// attribute needs `bareNumeric`. Named references still require the semicolon
+// there, and the decimal and hex forms stay separate alternatives.
+const STRICT_REF = /&(#[xX][0-9a-fA-F]+|#[0-9]+|[a-zA-Z]+);/g;
+const BARE_NUMERIC_REF = /&(#[xX][0-9a-fA-F]+;?|#[0-9]+;?|[a-zA-Z]+;)/g;
+
+/**
+ * @param {string} s
+ * @param {{bareNumeric?: boolean}} [opts]
+ */
+export function decodeEntities(s, { bareNumeric = false } = {}) {
+  return s.replace(bareNumeric ? BARE_NUMERIC_REF : STRICT_REF, (m, ref) => {
+    const body = ref.endsWith(';') ? ref.slice(0, -1) : ref;
     if (body[0] === '#') {
       const isHex = body[1] === 'x' || body[1] === 'X';
       const code = parseInt(body.slice(isHex ? 2 : 1), isHex ? 16 : 10);
