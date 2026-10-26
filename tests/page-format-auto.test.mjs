@@ -127,7 +127,7 @@ test('injectPrintPageCss: auto picks the sheet from the country', () => {
       '',
     ].join('\n'));
     const res = spawnSync(NODE, [probe], { env: workspaceEnv(dir), encoding: 'utf-8' });
-    assert.equal(res.status, 0, res.stderr);
+    assert.equal(res.status, 0, describeSpawn(res));
     assert.match(res.stdout, new RegExp(`@page \\{ size: ${sheet};`), `${country}: ${res.stdout}${res.stderr}`);
   }
 });
@@ -139,7 +139,7 @@ test('build-cv-html: country is a known payload key, not a typo to warn about', 
   const res = spawnSync(NODE, [join(ROOT, 'build-cv-html.mjs'), payloadPath, join(dir, 'output', 'cv.html')], {
     env: workspaceEnv(dir), encoding: 'utf-8',
   });
-  assert.equal(res.status, 0, res.stderr);
+  assert.equal(res.status, 0, describeSpawn(res));
   assert.doesNotMatch(res.stderr + res.stdout, /country/i);
 });
 
@@ -150,7 +150,7 @@ function buildHtml(dir, payload) {
   const res = spawnSync(NODE, [join(ROOT, 'build-cv-html.mjs'), payloadPath, out], {
     env: workspaceEnv(dir), encoding: 'utf-8',
   });
-  assert.equal(res.status, 0, res.stderr);
+  assert.equal(res.status, 0, describeSpawn(res));
   return readFileSync(out, 'utf-8');
 }
 
@@ -189,13 +189,13 @@ test('generate-pdf: --format still outranks auto and --country', () => {
 
 test('generate-pdf: a bare --country with no value fails instead of being dropped', () => {
   const res = runPdf(workspace('auto'), '--country');
-  assert.equal(res.status, 1);
+  assert.equal(res.status, 1, describeSpawn(res));
   assert.match(res.stderr, /Invalid country ""/);
 });
 
 test('generate-pdf: a malformed --country fails loudly, like a bad --format', () => {
   const res = runPdf(workspace('auto'), '--country=Germany');
-  assert.equal(res.status, 1);
+  assert.equal(res.status, 1, describeSpawn(res));
   assert.match(res.stderr, /Invalid country "Germany"/);
 });
 
@@ -313,7 +313,7 @@ test('generate-cover-letter: the payload country steers auto, and --country outr
 
 test('generate-pdf: --country keeps everything after the prefix, so DE=US is rejected', () => {
   const res = runPdf(workspace('auto'), '--country=DE=US');
-  assert.equal(res.status, 1);
+  assert.equal(res.status, 1, describeSpawn(res));
   assert.match(res.stderr, /Invalid country "DE=US"/);
 });
 
