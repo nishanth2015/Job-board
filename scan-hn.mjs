@@ -58,7 +58,15 @@ function loadPortals() {
 }
 
 function loadKeywords(portals) {
-  return portals?.hn_hiring?.keywords || ["Software Engineer"];
+  const keywords = portals?.hn_hiring?.keywords;
+  // One keyword written without list brackets (`keywords: Platform Engineer`)
+  // is a YAML scalar. buildTitleFilter reads only a list and drops anything
+  // else, so the scanner's only positive filter was gone and every HN post
+  // matched. This is scan-hn's own key, with no validator warning behind it
+  // (title_filter's bare-string case gets one in validate-portals), so the
+  // obvious reading is taken: one keyword.
+  if (typeof keywords === 'string' && keywords.trim()) return [keywords];
+  return keywords || ["Software Engineer"];
 }
 
 // hn_hiring.keywords is this scanner's positive list: a post's header line
