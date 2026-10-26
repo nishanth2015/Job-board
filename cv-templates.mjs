@@ -584,6 +584,138 @@ export function atsLint(path, kind, opts = {}) {
   return result;
 }
 
+// ---- renderLint (#5941) ----
+//
+// generate-pdf.mjs renders with JavaScript off and aborts every request that is
+// not file: or data:. Both are silent, so a template carrying a <script> or a
+// remote font renders without it and says nothing. renderLint says it. Same
+// posture as atsLint: warnings only, never throws, never blocks a render.
+// The rules live here rather than in templates/ats-rules.yml because they
+// describe the renderer, not modes/pdf.md.
+const TAG_RE = /<[a-zA-Z](?:"[^"]*"|'[^']*'|[^>"'])*>/g;
+const ANY_TAG_RE = /<\/?[a-zA-Z](?:"[^"]*"|'[^']*'|[^>"'])*>/g;
+const REMOTE_RE = /^\s*(?:https?:)?\/\//i;
+
+// Attribute text of a tag with quoted values removed, so `title="once=x"` is
+// not read as an attribute named once.
+function bareAttrs(tag) {
+  return tag.replace(/"[^"]*"|'[^']*'/g, '""');
+}
+
+// Reads attributes by walking the tag, so a quoted value that happens to
+// contain `src=x` is a value and not a second attribute.
+function attrValue(tag, name) {
+  const body = tag.replace(/^<[^\s>/]+/, '').replace(/\/?>$/, '');
+  const re = /([^\s"'<>/=]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+)))?/g;
+  for (const m of body.matchAll(re)) {
+    // The browser decodes character references in attribute values, so the
+    // lint must too: `https&#58;//x` is a remote URL.
+    if (m[1].toLowerCase() === name) return decodeEntities(m[2] ?? m[3] ?? m[4] ?? '');
+  }
+  return null;
+}
+
+// The URL of every srcset candidate, since a remote one can follow a local one.
+const srcsetUrls = (v) => v.split(',').map((c) => c.trim().split(/\s+/)[0]).filter(Boolean);
+
+const excerpt = (s) => s.replace(/\s+/g, ' ').trim().slice(0, 80);
+
+const RENDER_RULES = [
+  {
+    id: 'script-element',
+    rule: 'A <script> never runs: the renderer disables JavaScript.',
+    detect: (html) => (html.match(TAG_RE) || []).filter((tag) => /^<script\b/i.test(tag)).map(excerpt),
+  },
+  {
+    id: 'embedded-content',
+    rule: '<iframe>, <object> and <embed> pull in content the renderer will not load.',
+    detect: (html) => (html.match(TAG_RE) || []).filter((tag) => /^<(?:iframe|object|embed)\b/i.test(tag)).map(excerpt),
+  },
+  {
+    id: 'event-handler-attribute',
+    rule: 'An on* attribute never fires: the renderer disables JavaScript.',
+    detect: (html) => (html.match(TAG_RE) || [])
+      .filter((tag) => /\son[a-z]+\s*=/i.test(bareAttrs(tag)))
+      .map(excerpt),
+  },
+  {
+    id: 'script-url',
+    rule: 'A javascript: or data:text/html URL is never followed.',
+    detect: (html) => (html.match(TAG_RE) || [])
+      .filter((tag) => ['href', 'src', 'xlink:href'].some((a) => /^\s*(?:javascript:|data:text\/html)/i.test(attrValue(tag, a) ?? '')))
+      .map(excerpt),
+  },
+  {
+    id: 'meta-refresh',
+    rule: 'A <meta http-equiv="refresh"> redirect is not followed in a PDF render.',
+    detect: (html) => (html.match(TAG_RE) || [])
+      .filter((tag) => /^<meta\b/i.test(tag) && /^\s*refresh\s*$/i.test(attrValue(tag, 'http-equiv') ?? ''))
+      .map(excerpt),
+  },
+  {
+    id: 'remote-subresource',
+    rule: 'Every request that is not file: or data: is aborted, so a remote image, stylesheet or font is dropped without a message.',
+    detect: (html) => {
+      const out = [];
+      for (const tag of html.match(TAG_RE) || []) {
+        const name = /^<([a-zA-Z0-9]+)/.exec(tag)[1].toLowerCase();
+        const attrs = [];
+        if (['img', 'source', 'video', 'audio', 'track', 'image', 'input'].includes(name)) attrs.push('src');
+        if (name === 'img' || name === 'source') attrs.push('srcset');
+        if (name === 'video') attrs.push('poster');
+        if (name === 'image' || name === 'use') attrs.push('href', 'xlink:href');
+        if (name === 'link' && /\b(?:stylesheet|preload|icon|prefetch)\b/i.test(attrValue(tag, 'rel') ?? '')) attrs.push('href');
+        const urls = attrs.flatMap((a) => {
+          const v = attrValue(tag, a) ?? '';
+          return a === 'srcset' ? srcsetUrls(v) : [v];
+        });
+        if (urls.some((u) => REMOTE_RE.test(u))) out.push(excerpt(tag));
+      }
+      // Only CSS-bearing content: <style> bodies and style="" values. A title or
+      // visible text that happens to contain url(...) is prose, not a request.
+      // Bodies are found by walking real tags, so `<style>` written inside a
+      // quoted attribute value is text, not an element.
+      const sources = [];
+      let open = null;
+      for (const m of html.matchAll(ANY_TAG_RE)) {
+        if (/^<style\b/i.test(m[0])) open = m.index + m[0].length;
+        else if (open !== null && /^<\/style\b/i.test(m[0])) { sources.push(html.slice(open, m.index)); open = null; }
+      }
+      for (const tag of html.match(TAG_RE) || []) {
+        const inline = attrValue(tag, 'style');
+        if (inline) sources.push(inline);
+      }
+      const css = sources.join('\n').replace(/\/\*[\s\S]*?\*\//g, ' ');
+      for (const m of css.matchAll(/url\(\s*["']?\s*((?:https?:)?\/\/[^)"']*)/gi)) out.push(excerpt(`url(${m[1]})`));
+      for (const m of css.matchAll(/@import\s+["']\s*((?:https?:)?\/\/[^"']*)/gi)) out.push(excerpt(`@import ${m[1]}`));
+      return out;
+    },
+  },
+];
+
+/**
+ * Report what the renderer silently drops from a template.
+ * Advisory: every finding is a warning, and this never throws.
+ *
+ * @param {string} path Template file to read.
+ * @returns {{ok: boolean, path: string, findings: object[], error: string|null}}
+ */
+export function renderLint(path) {
+  const result = { ok: true, path, findings: [], error: null };
+  try {
+    const html = readFileSync(path, 'utf-8').replace(/<!--[\s\S]*?-->/g, ' ');
+    for (const { id, rule, detect } of RENDER_RULES) {
+      for (const detail of detect(html)) {
+        result.findings.push({ id, rule, severity: 'warning', detail });
+      }
+    }
+  } catch (err) {
+    result.error = err?.message || String(err);
+  }
+  result.ok = result.findings.length === 0 && !result.error;
+  return result;
+}
+
 export function loadProfileDefault(kind, { profilePath = DEFAULT_PROFILE_PATH, strict = false } = {}) {
   const cfg = KINDS[kind];
   if (!cfg) throw new Error(`Unknown template kind: ${kind}`);
@@ -699,9 +831,13 @@ if (isMain) {
         throw new Error(`lint reads HTML templates only; --format=${format} would report "no findings" without checking anything`);
       }
       const name = positionals[0];
+      if (flags.render) {
+        process.stdout.write(JSON.stringify(renderLint(resolveTemplate(kind, name, { format, fallback: Boolean(flags.fallback) })), null, 2) + '\n');
+        process.exit(0);
+      }
       process.stdout.write(JSON.stringify(atsLint(resolveTemplate(kind, name, { format, fallback: Boolean(flags.fallback) }), kind), null, 2) + '\n');
     } else {
-      process.stderr.write('Usage: node cv-templates.mjs <list|resolve|lint> <cv|cover> [name] [--format=html|tex] [--fallback]\n');
+      process.stderr.write('Usage: node cv-templates.mjs <list|resolve|lint> <cv|cover> [name] [--format=html|tex] [--fallback] [--render]\n');
       process.exit(2);
     }
   } catch (err) {
