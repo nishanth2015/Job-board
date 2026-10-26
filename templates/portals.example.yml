@@ -1264,6 +1264,11 @@ search_queries:
 # origin. A custom frontend merely handing applications to Eploy (for example,
 # Specsavers' Attrax jobs page) is not the same protocol and is not supported.
 #
+# wp-job-manager is explicit-only too: it reads the WP Job Manager plugin's
+# `/?feed=job_feed` RSS feed off any WordPress job board, and a WordPress
+# host has nothing to detect. Set `provider: wp-job-manager` + `careers_url`
+# (only the host is used). Check that board's robots.txt first.
+#
 # Some providers are job boards / aggregators with no per-company careers
 # URL to detect, so they must be selected with an explicit `provider:`
 # field. Those are the provider modules that omit detect(); the commented
@@ -1834,6 +1839,12 @@ search_queries:
 #   # Division path is required; one of:
 #   # it, engineering, marketing, sales, hr, logistics, finances, other
 #   careers_url: https://solid.jobs/public-api/offers/engineering
+#   enabled: true
+#
+# - name: Example WP Job Manager Board   # any WordPress board on the WP Job Manager plugin
+#   provider: wp-job-manager             # required — WordPress hosts are not auto-detected
+#   careers_url: https://jobs.example.com/   # board address; only the host is used
+#   max_pages: 20         # optional page cap (100 items/request, default 20, max 100)
 #   enabled: true
 #
 # -- Remote-job feeds  (→ job_boards:; set provider: plus any provider-specific fields) --
