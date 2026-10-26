@@ -385,6 +385,53 @@ export function isUnreadableVerdict(verdict) {
 }
 
 /**
+ * Does this verdict prove the posting is CLOSED?
+ *
+ * `expired` alone does not: an `insufficient_content` verdict is also
+ * `expired`, and it means the body could not be read — a page still
+ * hydrating, a client-side render that never landed — not that the posting
+ * is gone (#5408). AGENTS.md is explicit that "an unreadable JD, loading
+ * placeholder, or login/error page is unconfirmed, not closed".
+ *
+ * One definition, because the rule used to be COPIED. The scan-history record
+ * planner and batch-evaluate-gemini.mjs each spelled it out as
+ * `result !== 'expired' || isUnreadableVerdict(...)`, and the third caller —
+ * check-liveness.mjs --discard-expired, the only one of the three that writes
+ * to the tracker — took every `expired` verdict and never applied it. So an
+ * Evaluated row whose page was merely slow to render was rewritten to
+ * Discarded with the note "posting closed". Routing all three through here is
+ * what stops a fourth caller drifting the same way.
+ *
+ * @param {{result?: string, code?: string}|null|undefined} verdict
+ * @returns {boolean}
+ */
+export function isClosureEvidence(verdict) {
+  return verdict?.result === 'expired' && !isUnreadableVerdict(verdict);
+}
+
+/**
+ * The URLs `--discard-expired` may close: only those with closure evidence.
+ *
+ * Kept pure and exported so the exact selection the CLI uses is testable
+ * without a browser.
+ *
+ * @param {Array<{url?: string, result?: string, code?: string}>} verdicts
+ * @returns {{closed: string[], unreadable: string[]}} `unreadable` is reported
+ *   rather than silently dropped, so the user can see why a row they expected
+ *   to close was left alone.
+ */
+export function discardableExpiredUrls(verdicts) {
+  const closed = [];
+  const unreadable = [];
+  for (const v of verdicts ?? []) {
+    if (!v?.url) continue;
+    if (isClosureEvidence(v)) closed.push(v.url);
+    else if (v.result === 'expired' && isUnreadableVerdict(v)) unreadable.push(v.url);
+  }
+  return { closed, unreadable };
+}
+
+/**
  * Plan the `skipped_expired` scan-history rows for a batch of liveness verdicts.
  *
  * The pure half of recording a liveness sweep (#3891). Kept here rather than in
@@ -448,7 +495,7 @@ export function planExpiredHistoryRows(scanHistoryText = '', verdicts = [], norm
   const rows = [];
   const claimed = new Set();
   for (const verdict of verdicts ?? []) {
-    if (verdict?.result !== 'expired' || isUnreadableVerdict(verdict)) continue;
+    if (!isClosureEvidence(verdict)) continue;
     const candidate = typeof verdict.url === 'string' ? verdict.url.trim() : '';
     if (!candidate) continue;
     const known = knownByKey.get(normalizeUrl(candidate));

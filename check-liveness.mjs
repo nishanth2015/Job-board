@@ -30,7 +30,7 @@ import {
   sleep,
 } from './liveness-browser.mjs';
 import { checkLivenessViaApi } from './liveness-api.mjs';
-import { planExpiredHistoryRows, trackerLivenessTargets, DEFAULT_TRACKER_STATUSES, planExpiredDiscards, postingClosedNote, DEFAULT_DISCARD_STATUSES } from './liveness-core.mjs';
+import { planExpiredHistoryRows, trackerLivenessTargets, DEFAULT_TRACKER_STATUSES, planExpiredDiscards, postingClosedNote, DEFAULT_DISCARD_STATUSES, discardableExpiredUrls } from './liveness-core.mjs';
 import { appendToScanHistory, normalizeUrlForDedup, SCAN_HISTORY_PATH } from './scan.mjs';
 import { withPipelineLock } from './pipeline-lock.mjs';
 import { isMainModule } from './lib/is-main-module.mjs';
@@ -315,7 +315,15 @@ async function main() {
   }
 
   if (discardExpired) {
-    const expiredUrls = verdicts.filter((v) => v.result === 'expired').map((v) => v.url);
+    // Only closure EVIDENCE closes a row. An `insufficient_content` verdict is
+    // `expired` too, but it means the page could not be read, and this path
+    // writes Discarded to the tracker — see isClosureEvidence().
+    const { closed: expiredUrls, unreadable } = discardableExpiredUrls(verdicts);
+    if (unreadable.length > 0) {
+      console.log(`\nDiscard expired: ${unreadable.length} page(s) could not be read and were left as they are `
+        + '(an unreadable page is unconfirmed, not closed):');
+      for (const url of unreadable) console.log(`  · ${url}`);
+    }
     const planned = planExpiredDiscards(trackerText, expiredUrls, {
       statuses: DEFAULT_DISCARD_STATUSES,
       reportsRoot,

@@ -788,3 +788,57 @@ isUnreadableVerdict({ result: 'expired', code: 'hard_expired' }) === false
   && isUnreadableVerdict(undefined) === false
   ? pass('closed, active, other uncertain and missing verdicts are not unreadable')
   : fail('isUnreadableVerdict over-matched a non-insufficient_content verdict');
+
+// ── isClosureEvidence: only closure EVIDENCE closes a tracker row ────────────
+//
+// check-liveness.mjs --discard-expired used to take every `expired` verdict and
+// write Discarded to the tracker. An unreadable page is `expired` too, so an
+// Evaluated row whose posting was merely slow to render was closed out with the
+// note "posting closed". The two other callers already excluded it by copying
+// the rule; the destructive one never did. One predicate now serves all three.
+import { isClosureEvidence, discardableExpiredUrls } from '../liveness-core.mjs';
+import { readFileSync as readLivenessSource } from 'node:fs';
+import { fileURLToPath as toLivenessPath } from 'node:url';
+
+// The premise, asserted rather than assumed: a REAL unreadable verdict from the
+// classifier is `expired`, which is exactly why `expired` alone cannot gate a
+// write.
+unreadableProbe.result === 'expired'
+  ? pass('premise: classifyLiveness() reports an unreadable page as expired')
+  : fail(`premise failed: an unreadable page classified as ${unreadableProbe.result}, not expired`);
+
+isClosureEvidence({ result: 'expired', code: 'hard_expired' }) === true
+  && isClosureEvidence(unreadableProbe) === false
+  && isClosureEvidence({ result: 'uncertain', code: 'bot_challenge' }) === false
+  && isClosureEvidence({ result: 'active' }) === false
+  && isClosureEvidence(null) === false
+  ? pass('closure evidence is a real expired verdict, never an unreadable, uncertain or missing one')
+  : fail('isClosureEvidence accepted something that does not prove the posting closed');
+
+{
+  const { closed, unreadable } = discardableExpiredUrls([
+    { url: 'https://jobs.example.com/closed', result: 'expired', code: 'hard_expired' },
+    { ...unreadableProbe, url: 'https://jobs.example.com/still-loading' },
+    { url: 'https://jobs.example.com/live', result: 'active' },
+    { url: 'https://jobs.example.com/wall', result: 'uncertain', code: 'bot_challenge' },
+    { result: 'expired', code: 'hard_expired' },          // no url: nothing to discard
+  ]);
+  JSON.stringify(closed) === JSON.stringify(['https://jobs.example.com/closed'])
+    ? pass('--discard-expired closes only the posting with closure evidence')
+    : fail(`--discard-expired would close ${JSON.stringify(closed)} — an unreadable page must not be among them`);
+  JSON.stringify(unreadable) === JSON.stringify(['https://jobs.example.com/still-loading'])
+    ? pass('the unreadable page is reported, not silently dropped')
+    : fail(`unreadable pages not reported correctly: ${JSON.stringify(unreadable)}`);
+}
+
+{
+  // A guard on the CLI itself. Testing the helper proves nothing if
+  // check-liveness.mjs stops calling it, which is the shape this bug took.
+  const cliPath = toLivenessPath(new URL('../check-liveness.mjs', import.meta.url));
+  const cli = readLivenessSource(cliPath, 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/[^\n]*/g, '$1 ');
+  cli.includes('discardableExpiredUrls(')
+    && !/verdicts\.filter\(\s*\(?\s*v\s*\)?\s*=>\s*v\.result\s*===\s*'expired'\s*\)/.test(cli)
+    ? pass('check-liveness.mjs --discard-expired selects URLs through the shared predicate')
+    : fail('check-liveness.mjs builds its discard list without discardableExpiredUrls() — an unreadable page would be closed');
+}
