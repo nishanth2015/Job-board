@@ -703,8 +703,11 @@ function printSummary(stats, { followupsEnabled = true } = {}) {
       : '';
     // Only break out live/cold when there's a cold row to report — with no
     // follow-up data (or genuinely zero cold rows) the plain count is exactly
-    // as accurate and the parenthetical would be noise.
-    const liveInfo = t.activeAppsCold > 0 ? ` (${t.activeAppsLive} live, ${t.activeAppsCold} cold)` : '';
+    // as accurate and the parenthetical would be noise. 'Cold' is a follow-up
+    // cadence verdict, so it goes too when follow-ups are off: the Follow-ups
+    // line below says they are, and followup-cadence.mjs reports no cold rows
+    // then. JSON is unchanged, as for the follow-up line (#5710).
+    const liveInfo = followupsEnabled && t.activeAppsCold > 0 ? ` (${t.activeAppsLive} live, ${t.activeAppsCold} cold)` : '';
     console.log(`Tracker:    ${t.total} total | ${t.activeApps} active${liveInfo}${fit}`);
     const statusLine = Object.entries(t.byStatus).filter(([, c]) => c > 0).map(([s, c]) => `${s} ${c}`).join(' · ');
     if (statusLine) console.log(`Status:     ${statusLine}`);
