@@ -230,6 +230,12 @@ export function validateTemplate(path, kind) {
 
 const DEFAULT_ATS_RULES_PATH = resolve(__dirname, 'templates', 'ats-rules.yml');
 
+// Whether a rule can be judged on an unrendered template (#4798). `structural`
+// rules read markup and styling, which a template carries. `content` rules need
+// what the render payload fills in, so on a template they have no answer: they
+// are reported under `skipped`, never run, and never read as a pass.
+const ATS_RULE_SCOPES = ['structural', 'content'];
+
 export function loadAtsRules(path = DEFAULT_ATS_RULES_PATH) {
   const doc = loadYaml(readFileSync(path, 'utf-8')) || {};
   // A missing `rules:` key, a wrongly-typed one and an empty list used to
@@ -262,6 +268,13 @@ export function loadAtsRules(path = DEFAULT_ATS_RULES_PATH) {
     }
     if (!Array.isArray(rule.source) || rule.source.length === 0) {
       throw new Error(`${at} (${rule.id}): needs at least one source quote`);
+    }
+    // Own properties only, as for `detect` below: `scope: toString` is not a scope.
+    if (!ATS_RULE_SCOPES.some((scope) => scope === rule.scope)) {
+      throw new Error(
+        `${at} (${rule.id}): scope must be one of ${ATS_RULE_SCOPES.join(', ')}; got ${JSON.stringify(rule.scope)}. `
+          + 'A rule that does not say whether it needs rendered output cannot be dispatched honestly.'
+      );
     }
     if (!rule.must_not_flag) {
       throw new Error(`${at} (${rule.id}): needs must_not_flag, the half that decides whether the rule is worth having`);
@@ -550,10 +563,25 @@ export function atsLint(path, kind, opts = {}) {
           result.skipped.push({
             id: rule.id,
             rule: rule.rule,
+            scope: rule.scope,
             reason: `document language is "${lang}"; the accepted-header list is English only`,
           });
           continue;
         }
+      }
+
+      // A path handed to atsLint is a template, never rendered output, so a
+      // content rule has nothing to read. Skipped before its detector is even
+      // looked up: a clean result here would be a pass that checked nothing.
+      if (rule.scope === 'content') {
+        result.skipped.push({
+          id: rule.id,
+          rule: rule.rule,
+          scope: rule.scope,
+          reason: 'content-dependent: needs rendered output, and this is an unrendered template'
+            + (rule.unimplemented_because ? `. Also unimplemented: ${rule.unimplemented_because}` : ''),
+        });
+        continue;
       }
 
       const detector = rule.detect ? ATS_DETECTORS[rule.detect] : null;
@@ -561,6 +589,7 @@ export function atsLint(path, kind, opts = {}) {
         result.skipped.push({
           id: rule.id,
           rule: rule.rule,
+          scope: rule.scope,
           reason: rule.detect
             ? `no detector registered for "${rule.detect}"`
             : rule.unimplemented_because || 'no detector yet',
@@ -572,6 +601,7 @@ export function atsLint(path, kind, opts = {}) {
           id: rule.id,
           rule: rule.rule,
           severity: rule.severity || 'warning',
+          scope: rule.scope,
           detail,
           source: rule.source || [],
         });
