@@ -82,6 +82,14 @@ const DEFAULT_SECTION_TITLES = {
 // that change meaning in markup so tailored bullets containing &, <, >, quotes
 // (e.g. "R&D", "scaled 10x < budget", 'the "north star" metric') render as
 // literal text instead of breaking the document or injecting tags.
+//
+// Braces too, because they change meaning in the TEMPLATE: it is filled by
+// successive {{KEY}} replacements over the whole document, so escaped text is
+// scanned by every replacement after its own. A company of "Acme {{BULLETS}}
+// Corp" got the bullet list spliced into it, a summary naming {{SKILLS}} got
+// the skills grid, and a bullet about "{{FIRST_NAME}} merge fields" failed the
+// build as an unresolved placeholder. As entities they render the same and can
+// never read as a placeholder.
 function escapeHtml(text) {
   // Blank out only truly absent/structural values. A number or boolean scalar
   // (e.g. a payload with `year: 2024` instead of `"2024"`) must render its value,
@@ -93,7 +101,9 @@ function escapeHtml(text) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
+    .replace(/'/g, '&#39;')
+    .replace(/\{/g, '&#123;')
+    .replace(/\}/g, '&#125;');
 }
 
 // Normalize a URL: only allow the schemes the template's contact row uses,
