@@ -3019,6 +3019,16 @@ export function runCli(args = process.argv.slice(2)) {
     console.error(`ERROR: target file not found: ${parsed.targetArg}`);
     return 1;
   }
+  // An explicit --source that does not exist is a typo, not empty evidence.
+  // Read as '' it blocked every claim in the CV and told the user to "Add
+  // career evidence" to cv.md, for facts their real cv.md holds.
+  // generate-latex.mjs refuses the same case ("--source file not found"). The
+  // default sources are left alone: article-digest.md is optional.
+  const missingSources = parsed.sourcePaths.filter((p) => !existsSync(resolveInputPath(p)));
+  if (missingSources.length > 0) {
+    console.error(`ERROR: --source file not found: ${missingSources.join(', ')}`);
+    return 1;
+  }
   try {
     const result = verifyFacts(readFileSync(targetPath, 'utf-8'), {
       sourcePaths: parsed.sourcePaths.length ? parsed.sourcePaths : DEFAULT_SOURCES,
